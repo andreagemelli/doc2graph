@@ -1,4 +1,6 @@
+import argparse
 from datetime import datetime
+import os
 from attrdict import AttrDict
 from sklearn.model_selection import ShuffleSplit
 import torch
@@ -8,7 +10,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import dgl
 
 from src.data.dataloader import DocumentGraphs
-from src.paths import ROOT, TEST, TRAIN, CONFIGS
+from src.paths import CONFIGS, ROOT, FUNSD_TRAIN, FUNSD_TEST
 from src.utils.common import create_folder
 from src.utils.train import EarlyStopping, accuracy, evaluate, get_model, get_device, save_test_results, validate
 
@@ -21,7 +23,7 @@ def entity_labeling(args):
 
     if not args.test:
         ################* STEP 0: LOAD DATA ################
-        data = DocumentGraphs(name='FUNSD TRAIN', src_path=TRAIN, add_embs=args.add_embs)
+        data = DocumentGraphs(name='FUNSD TRAIN', src_path=FUNSD_TRAIN, add_embs=args.add_embs)
         data.get_info()
         n_classes = data.num_classes
         num_feats = data.num_features
@@ -80,7 +82,7 @@ def entity_labeling(args):
         ################* SKIP TRAINING ################
         print("\n### SKIP TRAINING ###")
         print(f" -> loading {args.weights}")
-        data = DocumentGraphs(name='FUNSD TRAIN', src_path=TRAIN, add_embs=args.add_embs)
+        data = DocumentGraphs(name='FUNSD TRAIN', src_path=FUNSD_TRAIN, add_embs=args.add_embs)
         model, tp = get_model(config.MODEL, [data.num_features, data.num_classes], args.add_attn)
         model.load_state_dict(torch.load(ROOT / args.weights))
         model.to(device)
@@ -89,7 +91,7 @@ def entity_labeling(args):
     print("\n### TESTING ###")
 
     #? test
-    test_data = DocumentGraphs(name='FUNSD TEST', src_path=TEST, add_embs=args.add_embs)
+    test_data = DocumentGraphs(name='FUNSD TEST', src_path=FUNSD_TEST, add_embs=args.add_embs)
     test_data.get_info()
     mean_test_acc, f1 = evaluate(model, test_data.graphs, device)
 

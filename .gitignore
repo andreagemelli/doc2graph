@@ -2,7 +2,11 @@
 *.egg-info/
 __pycache__/
 *.py[cod]
+*.eggs
+build
 
 #user-defined
 dataset
 _old
+*.env
+output

@@ -2,9 +2,7 @@ import argparse
 
 from src.training.train import train
 
-
-if __name__ == '__main__':
-
+def main():
     parser = argparse.ArgumentParser(description='Training')
 
     parser.add_argument("--gpu", type=int, default=-1,
@@ -27,3 +25,7 @@ if __name__ == '__main__':
         raise "Provide a weights file relative path! Or train a model first."
     
     train(args)
+
+if __name__ == '__main__':
+    main()
+    

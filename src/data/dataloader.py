@@ -20,11 +20,9 @@ class DocumentGraphs(data.Dataset):
         # initialize class
         self.name = name
         self.src_path = src_path
-        if not os.path.isdir(self.src_path): raise Exception(f'src_path {src_path} does not exists\n \
-                                                            -> please provide an existing path')
+        if not os.path.isdir(self.src_path): raise Exception(f'src_path {src_path} does not exists\n -> please provide an existing path')
         self.src_type = src_type
-        if src_type not in ['file', 'img', 'pdf']: raise Exception(f"src_type {self.src_type} invalid\n \
-                                                                    -> should be one of the following ['file', 'img', 'pdf']")
+        if src_type not in ['file', 'img', 'pdf']: raise Exception(f"src_type {self.src_type} invalid\n -> should be one of the following ['file', 'img', 'pdf']")
         self.add_embs = add_embs
         
         # get graphs
