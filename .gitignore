@@ -1,0 +1,8 @@
+# system
+*.egg-info/
+__pycache__/
+*.py[cod]
+
+#user-defined
+dataset
+_old

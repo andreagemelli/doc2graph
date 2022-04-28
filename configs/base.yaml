@@ -1,0 +1,14 @@
+MODEL:
+    # which model to use (choose one)
+    name: GCN # GAT, ...
+    num_layers: 3
+    hidden_dim: 64
+    dropout: 0.
+
+TRAIN:
+    lr: 0.01
+    weight_decay: 0.0005
+    epochs: 1000
+    batch_size: 1
+
+

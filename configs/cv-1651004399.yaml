@@ -1,0 +1,17 @@
+INFO:
+  f1-macro: 0.6133
+  f1-micro: 0.7326
+  features: true
+  split: 0
+  total_params: 13508
+  val_loss: 0.5918518304824829
+MODEL:
+  dropout: 0.0
+  hidden_dim: 64
+  name: GCN
+  num_layers: 2
+TRAIN:
+  batch_size: 14
+  epochs: 1000
+  lr: 0.01
+  weight_decay: 0.0005
