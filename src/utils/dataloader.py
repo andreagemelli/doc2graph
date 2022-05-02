@@ -8,11 +8,16 @@ import dgl
 embedder = spacy.load('en_core_web_sm')
 
 def fully_connected(ids : list):
+    # TODO add distance to edges
     u, v = list(), list()
     for id in ids:
         u.extend([id for i in range(len(ids))])
         v.extend([i for i in range(len(ids))])
     return torch.tensor(u), torch.tensor(v)
+
+def fromNAT():
+    #TODO
+    return
 
 def fromFUNSD(src : str, add_embs : bool):
     """ Parsing FUNSD annotation json files

@@ -10,10 +10,54 @@ import shutil
 import yaml
 
 from src.training.models import GcnSAGE
-from src.paths import CONFIGS, ROOT
+from src.paths import CONFIGS, OUTPUTS, RESULTS, ROOT, WEIGHTS
 from src.utils.common import create_folder
 
-class EarlyStopping:
+class EarlyStoppingAcc:
+    """Early stop for training purposes, looking at validation loss.
+    """
+    def __init__(self, model, name = '', cv = False, patience=50):
+        """Constructor.
+
+        Args:
+            model (DGLModel): graph or batch of graphs
+            name (str): name for weights.
+            cv (bool, optional): if performing cross validation, set to True. Defaults to False.
+            patience (int, optional): if validation do not improve after 'patience' iters, it stops training. Defaults to 50.
+        """
+        self.patience = patience
+        self.counter = 0
+        self.best_val_acc = None
+        self.early_stop = False
+        self.model = model
+        if name == '': self.name = str(datetime.timestamp(datetime.now())).split(".")[0]
+        else: self.name = name
+        self.cv = cv
+        if cv: create_folder(OUTPUTS / 'tmp')
+
+    def step(self, val_acc):
+        current = val_acc
+        if self.best_val_acc is None:
+            self.best_val_acc = current
+            self.save_checkpoint()
+        elif current <= self.best_val_acc:
+            self.counter += 1
+            print(f'    !- Stop Counter {self.counter} / {self.patience}')
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            print(f'    !- Validation accuracy increased from {self.best_val_acc} -> {current}')
+            self.best_val_acc = current
+            self.save_checkpoint()
+            self.counter = 0
+        return self.early_stop
+
+    def save_checkpoint(self):
+        '''Saves model when validation acc increase.'''
+        if self.cv: torch.save(self.model.state_dict(), OUTPUTS / 'tmp' / f'{self.name}.pt')
+        else: torch.save(self.model.state_dict(), WEIGHTS / f'{self.name}.pt')
+
+class EarlyStoppingVal:
     """Early stop for training purposes, looking at validation loss.
     """
     def __init__(self, model, name = '', cv = False, patience=50):
@@ -32,12 +76,10 @@ class EarlyStopping:
         self.model = model
         if name == '': self.name = str(datetime.timestamp(datetime.now())).split(".")[0]
         else: self.name = name
-        create_folder(ROOT / 'output')
-        create_folder(ROOT / 'output' / 'weights')
         self.cv = cv
-        if cv: create_folder(ROOT / 'output' / 'tmp')
+        if cv: create_folder(OUTPUTS / 'tmp')
 
-    def step(self, val_loss, model):
+    def step(self, val_loss):
         current = val_loss
         if self.best_val_loss is None:
             self.best_val_loss = current
@@ -56,8 +98,8 @@ class EarlyStopping:
 
     def save_checkpoint(self):
         '''Saves model when validation loss decrease.'''
-        if self.cv: torch.save(self.model.state_dict(), ROOT / 'output' / 'tmp' / f'{self.name}.pt')
-        else: torch.save(self.model.state_dict(), ROOT / 'output' / 'weights' / f'{self.name}.pt')
+        if self.cv: torch.save(self.model.state_dict(), OUTPUTS / 'tmp' / f'{self.name}.pt')
+        else: torch.save(self.model.state_dict(), WEIGHTS / f'{self.name}.pt')
 
 def save_best_results(best_params : dict, rm_logs : bool = False) -> None:
     """Save best results for cross validation.
@@ -66,8 +108,8 @@ def save_best_results(best_params : dict, rm_logs : bool = False) -> None:
         best_params (dict): best parameters among k-fold cross validation.
         rm_logs (bool, optional): Remove tmp weights in output folder if True. Defaults to False.
     """
-    models = ROOT / 'output' / 'tmp'
-    output = ROOT / 'output' / 'weights' / best_params['model']
+    models = OUTPUTS / 'tmp'
+    output = WEIGHTS / best_params['model']
     shutil.copyfile(models / best_params['model'], output)
 
     new_configs = CONFIGS / (best_params['model'].split(".")[0] + '.yaml')
@@ -95,8 +137,7 @@ def save_test_results(filename : str, infos : dict) -> None:
         filename (str): _description_
         infos (_type_): _description_
     """
-    create_folder(ROOT / 'output' / 'results')
-    results = ROOT / 'output' / 'results' / (filename + '.json')
+    results = RESULTS / (filename + '.json')
 
     with open(results, 'w') as f:
         json.dump(infos, f)

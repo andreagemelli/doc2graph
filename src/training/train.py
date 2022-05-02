@@ -11,8 +11,7 @@ import dgl
 
 from src.data.dataloader import DocumentGraphs
 from src.paths import CONFIGS, ROOT, FUNSD_TRAIN, FUNSD_TEST
-from src.utils.common import create_folder
-from src.utils.train import EarlyStopping, accuracy, evaluate, get_model, get_device, save_test_results, validate
+from src.utils.train import EarlyStoppingVal, accuracy, evaluate, get_model, get_device, save_test_results, validate
 
 def entity_labeling(args):
 
@@ -27,56 +26,61 @@ def entity_labeling(args):
         data.get_info()
         n_classes = data.num_classes
         num_feats = data.num_features
+        
+        #! Not easy
+        #TODO change train/val split to be "balanced" according to training
+        ss = ShuffleSplit(n_splits=1, test_size=config.TRAIN.val_size, random_state=0)
+
+        for train_index, val_index in ss.split(data.graphs): #? VALIDATION SPLITS
+            
+            train_graphs = [data.graphs[i] for i in train_index]
+            val_graphs = [data.graphs[i] for i in val_index]
+
+        batch_size = config.TRAIN.batch_size
+        num_batches = int(len(train_graphs) / batch_size)
 
         ################* STEP 1: CREATE MODEL ################
         model, tp = get_model(config.MODEL, [num_feats, n_classes], args.add_attn)
         model = model.to(device)
         loss_fcn = torch.nn.CrossEntropyLoss()
+        #TODO SGD + CosineAnnealingLR
         optimizer = torch.optim.Adam(model.parameters(), lr=config.TRAIN.lr, weight_decay=config.TRAIN.weight_decay)
         scheduler = ReduceLROnPlateau(optimizer, 'min', patience=10, verbose=True, factor=0.1)
         train_name = args.config + '-' + str(datetime.timestamp(datetime.now())).split(".")[0]
-        stopper = EarlyStopping(model, name=train_name)
-
+        stopper = EarlyStoppingVal(model, name=train_name)
     
         ################* STEP 1: TRAINING ################
         print("\n### TRAINING ###")
-        batch_size = config.TRAIN.batch_size
-        ss = ShuffleSplit(n_splits=1, test_size=0.1, random_state=0)
 
-        for train_index, val_index in ss.split(data.graphs): #? VALIDATION SPLITS
+        for epoch in range(config.TRAIN.epochs):
+            model.train()
+            train_acc = 0
+            shuffle(train_graphs)
 
-            train_graphs = [data.graphs[i] for i in train_index]
-            val_graphs = [data.graphs[i] for i in val_index]
+            for b in range(num_batches):
+                train_batch = train_graphs[b * batch_size: min((b+1)*batch_size, len(train_graphs))]
+                g = dgl.batch(train_batch)
+                g = g.int().to(device)
+                feat = g.ndata['feat'].to(device)
+                target = g.ndata['label'].to(device)
+                logits, attn = model(g, feat)
+                loss = loss_fcn(logits, target)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
-            for epoch in range(config.TRAIN.epochs):
-                model.train()
-                train_acc = 0
-                shuffle(train_graphs)
+                acc = accuracy(logits, target)
+                train_acc += acc
 
-                for b in range(int(len(train_graphs) / batch_size)):
-                    train_batch = train_graphs[b * batch_size: min((b+1)*batch_size, len(train_graphs))]
-                    g = dgl.batch(train_batch)
-                    g = g.int().to(device)
-                    feat = g.ndata['feat'].to(device)
-                    target = g.ndata['label'].to(device)
-                    logits, attn = model(g, feat)
-                    loss = loss_fcn(logits, target)
-                    optimizer.zero_grad()
-                    loss.backward()
-                    optimizer.step()
+            mean_train_acc = train_acc / len(data.graphs)
+            val_acc, val_loss = validate(model, val_graphs, device, loss_fcn)
+            scheduler.step(val_loss)
 
-                    acc = accuracy(logits, target)
-                    train_acc += acc
-
-                mean_train_acc = train_acc / len(data.graphs)
-                val_acc, val_loss = validate(model, val_graphs, device, loss_fcn)
-                scheduler.step(val_loss)
-
-                print("Epoch {:05d} | TrainLoss {:.4f} | TrainAcc {:.4f} | ValLoss {:.4f} | ValAcc {:.4f} |"
-                .format(epoch, loss.item(), mean_train_acc, val_loss, val_acc))
-                
-                #* UPDATE
-                if stopper.step(val_loss, model): break
+            print("Epoch {:05d} | TrainLoss {:.4f} | TrainAcc {:.4f} | ValLoss {:.4f} | ValAcc {:.4f} |"
+            .format(epoch, loss.item(), mean_train_acc, val_loss, val_acc))
+            
+            #* UPDATE
+            if stopper.step(val_loss): break
     
     else:
         ################* SKIP TRAINING ################
@@ -116,10 +120,6 @@ def entity_linking():
     return
 
 def train(args):
-    
-    create_folder('output')
-    create_folder('output/weights')
-    create_folder('output/runs')
 
     if args.task == 'elab':
         entity_labeling(args)

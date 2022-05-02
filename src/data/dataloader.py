@@ -9,10 +9,10 @@ class DocumentGraphs(data.Dataset):
     """This class convert documents (both images or pdfs) into graph structures.
     """
 
-    def __init__(self, name : str, src_path : str, src_type : str = 'file', add_embs : bool = False) -> None:
+    def __init__(self, name : str, src_path : str, src_type : str = 'gt', add_embs : bool = False) -> None:
         """
         Args:
-            src_type (str): should be one of the following: ['file', 'img', 'pdf']
+            src_type (str): should be one of the following: ['gt', 'img', 'pdf']
             src_path (str): path to folder containing documents
             add_embs (bool): If True, use Spacy to convert text contents to word embeddings
         """
@@ -22,11 +22,11 @@ class DocumentGraphs(data.Dataset):
         self.src_path = src_path
         if not os.path.isdir(self.src_path): raise Exception(f'src_path {src_path} does not exists\n -> please provide an existing path')
         self.src_type = src_type
-        if src_type not in ['file', 'img', 'pdf']: raise Exception(f"src_type {self.src_type} invalid\n -> should be one of the following ['file', 'img', 'pdf']")
+        if src_type not in ['gt', 'img', 'pdf']: raise Exception(f"src_type {self.src_type} invalid\n -> should be one of the following ['gt', 'img', 'pdf']")
         self.add_embs = add_embs
         
         # get graphs
-        self.graphs, self.labels = self.docsToGraphs(self.src_type, self.src_path, self.add_embs)
+        self.graphs, self.labels = self.__docs2graphs(self.src_type, self.src_path, self.add_embs)
 
         # Labels to numeric value
         self.unique_labels = np.unique(self.labels[0])
@@ -37,12 +37,17 @@ class DocumentGraphs(data.Dataset):
             self.graphs[idx].ndata['label'] = torch.tensor([np.where(target == self.unique_labels)[0][0] for target in g_labels])
     
     def __getitem__(self, index):
-        # Read the graph and label
+        # Return indexed graph
         return self.graphs[index]
     
-    def docsToGraphs(self, type : str, src : str, add_embs : bool):
-        if type == 'file':
+    def __len__(self):
+        # Return dataset length
+        return len(self.graphs)
+    
+    def __docs2graphs(self, type : str, src : str, add_embs : bool):
+        if type == 'gt':
             #! call / write your custom dataset function
+            # fromNAF()
             return fromFUNSD(src, add_embs)
 
         elif type == 'img':
