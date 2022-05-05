@@ -27,6 +27,10 @@ def naf():
     download_url("https://github.com/herobd/NAF_dataset/releases/download/v1.0/labeled_images.tar.gz", dlz)
     os.system(f'cd {DATA}/NAF && ./move_images.sh')
 
+def sanket():
+    # TODO download sanket dataset
+    pass
+
 def get_data():
     #funsd()
     naf()

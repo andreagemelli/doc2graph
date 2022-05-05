@@ -3,7 +3,7 @@
 - [doc2graph - Documents transformed to Graphs](#doc2graph---documents-transformed-to-graphs)
   - [Info](#info)
   - [Install](#install)
-  - [Preprocessing settings](#preprocessing-settings)
+  - [Settings](#settings)
   - [Training](#training)
 
 ## Info
@@ -22,14 +22,16 @@ pip install dgl-cu113 dglgo -f https://data.dgl.ai/wheels/repo.html
 python -m spacy download en_core_web_sm
 ```
 
-## Preprocessing settings
-The project can be customized either changing directly config yaml files or providing these flags when calling `src/main.py`.
+## Settings
+The project can be customized either changing directly `configs/base.yaml` file or providing these flags when calling `src/main.py`.
  - --add_embs: True / False (to add textual features to graph nodes)
  - --add_eweights:True / False (to add layout features to graph edges)
  - --add_visual: True / False (to add visual features to graph nodes)
  - --edge_type: (string) fully, knn or visibility to change the kind of connectivity
  - --src_data: (string) FUNSD, NAF, SANKET or CUSTOM
  - --src_type: (string) img, pdf if src_data is CUSTOM
+
+Change directly `configs/train.yaml` for training settings or create your own model copying `configs/models/gcn.yaml`.
 
 ## Training
 1. To download data and init project,

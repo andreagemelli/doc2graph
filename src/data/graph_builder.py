@@ -91,8 +91,6 @@ class GraphBuilder():
             g = dgl.graph((u, v), num_nodes=len(boxs), idtype=torch.int32)
             graphs.append(g), labels.append(g_labels)
 
-            
-
         return graphs, labels, features
     
     def __fromSANKET():

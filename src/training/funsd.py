@@ -41,9 +41,10 @@ def entity_labeling(args):
         loss_fcn = torch.nn.CrossEntropyLoss()
         #TODO Try also SGD + CosineAnnealingLR
         optimizer = torch.optim.Adam(model.parameters(), lr=cfg_train.lr, weight_decay=cfg_train.weight_decay)
-        scheduler = ReduceLROnPlateau(optimizer, 'min', patience=10, verbose=True, factor=0.1)
-        train_name = args.model + '-' + str(datetime.timestamp(datetime.now())).split(".")[0]
-        stopper = EarlyStopping(model, name=train_name, metric=cfg_train.stopper_metric[0])
+        scheduler = ReduceLROnPlateau(optimizer, 'min', patience=10, verbose=True, factor=0.05)
+        e = datetime.now()
+        train_name = args.model + f'-{e.strftime("%Y%m%d-%H%M")}'
+        stopper = EarlyStopping(model, name=train_name, metric=cfg_train.stopper_metric)
     
         ################* STEP 1: TRAINING ################
         print("\n### TRAINING ###")
@@ -106,7 +107,7 @@ def entity_labeling(args):
     else: feat = 'bbox'
 
     #? if skipping training, no need to save anything
-    results = {'model': sm.get_name(), 'net-params': sm.get_total_params(), 'features': feat, 'val-loss': stopper.best_val_loss, 'f1-scores': f1}
+    results = {'model': sm.get_name(), 'net-params': sm.get_total_params(), 'features': feat, 'val-loss': stopper.best_score, 'f1-scores': f1}
     if not args.test: save_test_results(train_name, results)
     return
 

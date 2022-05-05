@@ -1,5 +1,5 @@
 FEATURES:
-  add_embs: true
+  add_embs: false
   add_eweights: false
   add_visual: false
 GRAPHS:

@@ -28,7 +28,8 @@ class EarlyStopping:
         self.early_stop = False
         self.model = model
         self.metric = metric
-        if name == '': self.name = str(datetime.timestamp(datetime.now())).split(".")[0]
+        e = datetime.now()
+        if name == '': self.name = f'{e.strftime("%Y%m%d-%H%M")}'
         else: self.name = name
 
     def step(self, score):
@@ -44,7 +45,7 @@ class EarlyStopping:
                     self.early_stop = True
             else:
                 print(f'    !- Validation LOSS decreased from {self.best_score} -> {score}')
-                self.best_val_acc = score
+                self.best_score = score
                 self.save_checkpoint()
                 self.counter = 0
 
