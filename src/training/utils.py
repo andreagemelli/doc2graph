@@ -3,103 +3,70 @@ from itsdangerous import json
 from sklearn.metrics import f1_score
 import torch
 import dgl
-import torch.nn.functional as F
 from datetime import datetime
 import shutil
-
 import yaml
 
-from src.training.models import GcnSAGE
-from src.paths import CONFIGS, OUTPUTS, RESULTS, ROOT, WEIGHTS
-from src.utils.common import create_folder
+from src.paths import CONFIGS, OUTPUTS, RESULTS, WEIGHTS
 
-class EarlyStoppingAcc:
+
+class EarlyStopping:
     """Early stop for training purposes, looking at validation loss.
     """
-    def __init__(self, model, name = '', cv = False, patience=50):
+    def __init__(self, model, name = '', metric = 'loss', patience=50):
         """Constructor.
 
         Args:
             model (DGLModel): graph or batch of graphs
             name (str): name for weights.
-            cv (bool, optional): if performing cross validation, set to True. Defaults to False.
+            metric (str): set the stopper, following loss ['loss'] or accuracy ['acc'] on validation
             patience (int, optional): if validation do not improve after 'patience' iters, it stops training. Defaults to 50.
         """
         self.patience = patience
         self.counter = 0
-        self.best_val_acc = None
+        self.best_score = None
         self.early_stop = False
         self.model = model
+        self.metric = metric
         if name == '': self.name = str(datetime.timestamp(datetime.now())).split(".")[0]
         else: self.name = name
-        self.cv = cv
-        if cv: create_folder(OUTPUTS / 'tmp')
 
-    def step(self, val_acc):
-        current = val_acc
-        if self.best_val_acc is None:
-            self.best_val_acc = current
+    def step(self, score):
+        if self.best_score is None:
+            self.best_score = score
             self.save_checkpoint()
-        elif current <= self.best_val_acc:
-            self.counter += 1
-            print(f'    !- Stop Counter {self.counter} / {self.patience}')
-            if self.counter >= self.patience:
-                self.early_stop = True
+
+        if self.metric == 'loss':
+            if score > self.best_score:
+                self.counter += 1
+                print(f'    !- Stop Counter {self.counter} / {self.patience}')
+                if self.counter >= self.patience:
+                    self.early_stop = True
+            else:
+                print(f'    !- Validation LOSS decreased from {self.best_score} -> {score}')
+                self.best_val_acc = score
+                self.save_checkpoint()
+                self.counter = 0
+
+        elif self.metric == 'acc':
+            if score <= self.best_score:
+                self.counter += 1
+                print(f'    !- Stop Counter {self.counter} / {self.patience}')
+                if self.counter >= self.patience:
+                    self.early_stop = True
+            else:
+                print(f'    !- Validation ACCURACY increased from {self.best_score} -> {score}')
+                self.best_score = score
+                self.save_checkpoint()
+                self.counter = 0
         else:
-            print(f'    !- Validation accuracy increased from {self.best_val_acc} -> {current}')
-            self.best_val_acc = current
-            self.save_checkpoint()
-            self.counter = 0
+            raise Exception('EarlyStopping Error: metric provided not valid. Select between loss or acc')
+
         return self.early_stop
 
     def save_checkpoint(self):
         '''Saves model when validation acc increase.'''
-        if self.cv: torch.save(self.model.state_dict(), OUTPUTS / 'tmp' / f'{self.name}.pt')
-        else: torch.save(self.model.state_dict(), WEIGHTS / f'{self.name}.pt')
-
-class EarlyStoppingVal:
-    """Early stop for training purposes, looking at validation loss.
-    """
-    def __init__(self, model, name = '', cv = False, patience=50):
-        """Constructor.
-
-        Args:
-            model (DGLModel): graph or batch of graphs
-            name (str): name for weights.
-            cv (bool, optional): if performing cross validation, set to True. Defaults to False.
-            patience (int, optional): if validation do not improve after 'patience' iters, it stops training. Defaults to 50.
-        """
-        self.patience = patience
-        self.counter = 0
-        self.best_val_loss = None
-        self.early_stop = False
-        self.model = model
-        if name == '': self.name = str(datetime.timestamp(datetime.now())).split(".")[0]
-        else: self.name = name
-        self.cv = cv
-        if cv: create_folder(OUTPUTS / 'tmp')
-
-    def step(self, val_loss):
-        current = val_loss
-        if self.best_val_loss is None:
-            self.best_val_loss = current
-            self.save_checkpoint()
-        elif current >= self.best_val_loss:
-            self.counter += 1
-            print(f'    !- Stop Counter {self.counter} / {self.patience}')
-            if self.counter >= self.patience:
-                self.early_stop = True
-        else:
-            print(f'    !- Validation loss decreased from {self.best_val_loss} -> {current}')
-            self.best_val_loss = current
-            self.save_checkpoint()
-            self.counter = 0
-        return self.early_stop
-
-    def save_checkpoint(self):
-        '''Saves model when validation loss decrease.'''
-        if self.cv: torch.save(self.model.state_dict(), OUTPUTS / 'tmp' / f'{self.name}.pt')
-        else: torch.save(self.model.state_dict(), WEIGHTS / f'{self.name}.pt')
+        torch.save(self.model.state_dict(), WEIGHTS / f'{self.name}.pt')
 
 def save_best_results(best_params : dict, rm_logs : bool = False) -> None:
     """Save best results for cross validation.
@@ -214,30 +181,3 @@ def get_device(value : int) -> str:
         return 'cpu'
     else: 
         return 'cuda:{}'.format(value)
-
-def get_model(model, nums, attn):
-    """Return the DGL model defined in the setting file
-
-    Args:
-        model (Object): model settings
-        nums (list): num_features and num_classes
-        attn (boolean): add attention or not
-
-    Returns:
-        A PyTorch Model
-    """
-    print("\n### MODEL ###")
-    print(f" -> Using {model['name']}")
-
-    if model['name'] == 'GCN':
-        m = GcnSAGE(nums[0], model['hidden_dim'], nums[1], model['num_layers'], F.relu, model['dropout'], attn)
-        total_params = sum(p.numel() for p in m.parameters() if p.requires_grad)
-        print(f" -> Total params: {total_params}\n")
-        print(m)
-        return m, total_params
-
-    elif model['name'] == 'GAT':
-        return ""
-
-    else:
-        raise f"Error! Model {model['name']} do not exists."

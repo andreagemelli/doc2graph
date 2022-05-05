@@ -1,0 +1,16 @@
+batch_size: 15
+epochs: 1000
+lr: 0.01
+weight_decay: 0.0005
+val_size : 0.1
+optimizer: 
+  - Adam 
+  # - AdamW 
+  # - SGD
+scheduler:
+  - ReduceLROnPlateau
+  # - CosineAnnealingLR
+  # - None
+stopper_metric:
+  - loss
+  # - acc

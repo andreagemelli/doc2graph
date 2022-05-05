@@ -10,6 +10,7 @@ ROOT = Path(config['ROOT'])
 # PROJECT TREE
 DATA = ROOT / 'DATA'
 CONFIGS = ROOT / 'configs'
+MODELS = CONFIGS / 'models'
 OUTPUTS = ROOT / 'outputs'
 WEIGHTS = OUTPUTS / 'weights'
 RUNS = OUTPUTS / 'runs'
@@ -18,3 +19,6 @@ RESULTS = OUTPUTS / 'results'
 # FUNSD
 FUNSD_TRAIN = DATA / 'FUNSD' / 'training_data'
 FUNSD_TEST = DATA / 'FUNSD' / 'testing_data'
+
+# NAF
+NAF = DATA / 'NAF'

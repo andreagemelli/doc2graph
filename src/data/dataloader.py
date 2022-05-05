@@ -1,15 +1,16 @@
+from src.data.feature_builder import FeatureBuilder
+from src.data.graph_builder import GraphBuilder
+from src.utils import get_config
 import torch
 import torch.utils.data as data
 import os
 import numpy as np
 
-from src.utils.dataloader import fromFUNSD
-
-class DocumentGraphs(data.Dataset):
+class Document2Graph(data.Dataset):
     """This class convert documents (both images or pdfs) into graph structures.
     """
 
-    def __init__(self, name : str, src_path : str, src_type : str = 'gt', add_embs : bool = False) -> None:
+    def __init__(self, name : str, src_path : str) -> None:
         """
         Args:
             src_type (str): should be one of the following: ['gt', 'img', 'pdf']
@@ -21,20 +22,22 @@ class DocumentGraphs(data.Dataset):
         self.name = name
         self.src_path = src_path
         if not os.path.isdir(self.src_path): raise Exception(f'src_path {src_path} does not exists\n -> please provide an existing path')
-        self.src_type = src_type
-        if src_type not in ['gt', 'img', 'pdf']: raise Exception(f"src_type {self.src_type} invalid\n -> should be one of the following ['gt', 'img', 'pdf']")
-        self.add_embs = add_embs
-        
+        self.cfg_preprocessing = get_config('preprocessing')
+        self.src_data = self.cfg_preprocessing.LOADER.src_data
+        self.gb = GraphBuilder()
+        self.fb = FeatureBuilder()
+
         # get graphs
-        self.graphs, self.labels = self.__docs2graphs(self.src_type, self.src_path, self.add_embs)
+        self.graphs, self.labels = self.docs2graphs()
 
         # Labels to numeric value
-        self.unique_labels = np.unique(self.labels[0])
-        self.num_classes = len(self.unique_labels)
-        self.num_features = self.graphs[0].ndata['feat'].shape[1]
+        if self.labels:
+            self.unique_labels = np.unique(self.labels[0])
+            self.num_classes = len(self.unique_labels)
+            self.num_features = self.graphs[0].ndata['feat'].shape[1]
         
-        for idx, g_labels in enumerate(self.labels):
-            self.graphs[idx].ndata['label'] = torch.tensor([np.where(target == self.unique_labels)[0][0] for target in g_labels])
+            for idx, g_labels in enumerate(self.labels):
+                self.graphs[idx].ndata['label'] = torch.tensor([np.where(target == self.unique_labels)[0][0] for target in g_labels])
     
     def __getitem__(self, index):
         # Return indexed graph
@@ -44,28 +47,22 @@ class DocumentGraphs(data.Dataset):
         # Return dataset length
         return len(self.graphs)
     
-    def __docs2graphs(self, type : str, src : str, add_embs : bool):
-        if type == 'gt':
-            #! call / write your custom dataset function
-            # fromNAF()
-            return fromFUNSD(src, add_embs)
+    def docs2graphs(self):
+        """It uses GraphBuilder and FeaturesBuilder objects to get graphs (and lables, if any) from source data.
 
-        elif type == 'img':
-            #TODO Use OCR tool (e.g. Tesseract) to extract node bboxs and text contents
-            raise Exception('img src_type not yet implemented\n -> select file as src_type')
-        
-        elif type == 'pdf':
-            #TODO Use PyMuPDF tool to extract node bboxs and text contents
-            raise Exception('pdf src_type not yet implemented\n -> select file as src_type')
+        Returns:
+            tuple: DGL Graph and label
+        """
+        graphs, labels, features = self.gb.get_graph(self.src_path, self.src_data)
+        self.fb.add_features(graphs, features)
+        return graphs, labels
     
     def label2class(self, label):
         # Converts the numeric label to the corresponding string
         return self.unique_labels[label]
     
     def get_info(self):
-        print(f"\n{self.name.upper()} dataset:\n\
-    -> graphs: {len(self.graphs)}\n\
-    -> labels: {self.unique_labels}\n\
-    -> num features: {self.num_features}\n\
-    -> textual features: {self.add_embs}\n\
-    -> graph example: {self.graphs[0]}")
+        print(f"\n{self.name.upper()} dataset:\n-> graphs: {len(self.graphs)}\n-> labels: {self.unique_labels}\n-> num features: {self.num_features}")
+        self.gb.get_info()
+        self.fb.get_info()
+        print(f"-> graph example: {self.graphs[0]}")

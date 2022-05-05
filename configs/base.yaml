@@ -1,14 +1,21 @@
-MODEL:
-    # which model to use (choose one)
-    name: GCN # GAT, ...
-    num_layers: 3
-    hidden_dim: 64
-    dropout: 0.
-TRAIN:
-    lr: 0.01
-    weight_decay: 0.0005
-    epochs: 1000
-    batch_size: 1
-    val_size : 0.1
+# THIS YAML SETTING IS USED AS A BASE TO PRODUCE THE 'PREPROCESSING.YAML' ONE.
+# THIS IT IS MEANT TO BE USED AS A STARTING POINT AND DOCUMENTATION ONE (see all the different choises a user has).
 
-
+LOADER:
+  src_data:
+    - FUNSD
+    # - NAF
+    # - SANKET
+    # - CUSTOM
+FEATURES:
+  add_embs: False
+  add_visual: False
+  add_eweights: False
+GRAPHS:
+  edge_type:
+    - fully
+    # - knn
+    # - visibility
+  data_type:
+    - img
+    # - pdf

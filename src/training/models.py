@@ -3,6 +3,48 @@ import torch.nn as nn
 import dgl.function as fn
 from dgl.nn import GATConv
 import math
+import torch.nn.functional as F
+
+from src.paths import MODELS
+from src.utils import get_config
+
+class SetModel():
+    def __init__(self, name='gcn') -> None:
+
+        self.cfg_model = get_config(MODELS / name)
+        self.name = self.cfg_model.name
+        self.total_params = 0
+    
+    def get_name(self):
+        return self.name
+    
+    def get_total_params(self):
+        self.total_params
+
+    def get_model(self, num_features, num_classes):
+        """Return the DGL model defined in the setting file
+
+        Args:
+            nums (list): num_features and num_classes
+
+        Returns:
+            A PyTorch Model
+        """
+        print("\n### MODEL ###")
+        print(f"-> Using {self.name}")
+
+        if self.name == 'GCN':
+            m = GcnSAGE(num_features, self.cfg_model.hidden_dim, num_classes, self.cfg_model.num_layers, F.relu, self.cfg_model.dropout, self.cfg_model.attn)
+            self.total_params = sum(p.numel() for p in m.parameters() if p.requires_grad)
+            print(f"-> Total params: {self.total_params}\n")
+            print(m)
+            return m
+
+        elif self.name == 'GAT':
+            return ""
+
+        else:
+            raise Exception(f"Error! Model {self.name} do not exists.")
 
 class GAT(nn.Module):
 
@@ -85,7 +127,6 @@ class GcnSAGELayer(nn.Module):
         if not self.use_pp:
             norm = self.get_norm(g)
             g.ndata['h'] = h
-            # todo check edge features
             # g.update_all(fn.u_mul_e('h', 'feat', 'm'),
             #              fn.sum(msg='m', out='h'))
             g.update_all(fn.copy_u('h', 'm'),

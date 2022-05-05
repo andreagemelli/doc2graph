@@ -1,0 +1,9 @@
+FEATURES:
+  add_embs: true
+  add_eweights: false
+  add_visual: false
+GRAPHS:
+  data_type: img
+  edge_type: fully
+LOADER:
+  src_data: FUNSD

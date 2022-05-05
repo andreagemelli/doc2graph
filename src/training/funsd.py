@@ -1,63 +1,61 @@
-import argparse
 from datetime import datetime
-import os
-from attrdict import AttrDict
 from sklearn.model_selection import ShuffleSplit
 import torch
-import yaml
 from random import shuffle
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import dgl
 
-from src.data.dataloader import DocumentGraphs
-from src.paths import CONFIGS, ROOT, FUNSD_TRAIN, FUNSD_TEST
-from src.utils.train import EarlyStoppingVal, accuracy, evaluate, get_model, get_device, save_test_results, validate
+from src.data.dataloader import Document2Graph
+from src.paths import ROOT, FUNSD_TRAIN, FUNSD_TEST
+from src.training.models import SetModel
+from src.utils import get_config
+from src.training.utils import EarlyStopping, accuracy, evaluate, get_device, save_test_results, validate
 
 def entity_labeling(args):
 
     # configs
-    with open(CONFIGS / f'{args.config}.yaml') as fileobj:
-        config = AttrDict(yaml.safe_load(fileobj))
+    sm = SetModel(name=args.model)
+    cfg_train = get_config('train')
     device = get_device(args.gpu)
 
     if not args.test:
         ################* STEP 0: LOAD DATA ################
-        data = DocumentGraphs(name='FUNSD TRAIN', src_path=FUNSD_TRAIN, add_embs=args.add_embs)
+        data = Document2Graph(name='FUNSD TRAIN', src_path=FUNSD_TRAIN)
         data.get_info()
-        n_classes = data.num_classes
         num_feats = data.num_features
+        num_classes = data.num_classes
         
         #! Not easy
         #TODO change train/val split to be "balanced" according to training
-        ss = ShuffleSplit(n_splits=1, test_size=config.TRAIN.val_size, random_state=0)
+        ss = ShuffleSplit(n_splits=1, test_size=cfg_train.val_size, random_state=0)
+        train_index, val_index = next(ss.split(data.graphs)) #? VALIDATION SPLITS
+        train_graphs = [data.graphs[i] for i in train_index]
+        val_graphs = [data.graphs[i] for i in val_index]
 
-        for train_index, val_index in ss.split(data.graphs): #? VALIDATION SPLITS
-            
-            train_graphs = [data.graphs[i] for i in train_index]
-            val_graphs = [data.graphs[i] for i in val_index]
-
-        batch_size = config.TRAIN.batch_size
+        batch_size = cfg_train.batch_size
         num_batches = int(len(train_graphs) / batch_size)
 
         ################* STEP 1: CREATE MODEL ################
-        model, tp = get_model(config.MODEL, [num_feats, n_classes], args.add_attn)
+        model = sm.get_model(num_feats, num_classes)
         model = model.to(device)
         loss_fcn = torch.nn.CrossEntropyLoss()
-        #TODO SGD + CosineAnnealingLR
-        optimizer = torch.optim.Adam(model.parameters(), lr=config.TRAIN.lr, weight_decay=config.TRAIN.weight_decay)
+        #TODO Try also SGD + CosineAnnealingLR
+        optimizer = torch.optim.Adam(model.parameters(), lr=cfg_train.lr, weight_decay=cfg_train.weight_decay)
         scheduler = ReduceLROnPlateau(optimizer, 'min', patience=10, verbose=True, factor=0.1)
-        train_name = args.config + '-' + str(datetime.timestamp(datetime.now())).split(".")[0]
-        stopper = EarlyStoppingVal(model, name=train_name)
+        train_name = args.model + '-' + str(datetime.timestamp(datetime.now())).split(".")[0]
+        stopper = EarlyStopping(model, name=train_name, metric=cfg_train.stopper_metric[0])
     
         ################* STEP 1: TRAINING ################
         print("\n### TRAINING ###")
+        print(f"-> Training samples: {len(train_graphs)}")
+        print(f"-> Validation samples: {len(val_graphs)}\n")
 
-        for epoch in range(config.TRAIN.epochs):
+        for epoch in range(cfg_train.epochs):
             model.train()
             train_acc = 0
             shuffle(train_graphs)
 
-            for b in range(num_batches):
+            for b in range(num_batches + 1):
                 train_batch = train_graphs[b * batch_size: min((b+1)*batch_size, len(train_graphs))]
                 g = dgl.batch(train_batch)
                 g = g.int().to(device)
@@ -72,7 +70,7 @@ def entity_labeling(args):
                 acc = accuracy(logits, target)
                 train_acc += acc
 
-            mean_train_acc = train_acc / len(data.graphs)
+            mean_train_acc = train_acc / (num_batches + 1)
             val_acc, val_loss = validate(model, val_graphs, device, loss_fcn)
             scheduler.step(val_loss)
 
@@ -80,14 +78,15 @@ def entity_labeling(args):
             .format(epoch, loss.item(), mean_train_acc, val_loss, val_acc))
             
             #* UPDATE
-            if stopper.step(val_loss): break
+            if cfg_train.stopper_metric == 'loss' and stopper.step(val_loss): break
+            if cfg_train.stopper_metric == 'acc' and stopper.step(val_acc): break
     
     else:
         ################* SKIP TRAINING ################
         print("\n### SKIP TRAINING ###")
-        print(f" -> loading {args.weights}")
-        data = DocumentGraphs(name='FUNSD TRAIN', src_path=FUNSD_TRAIN, add_embs=args.add_embs)
-        model, tp = get_model(config.MODEL, [data.num_features, data.num_classes], args.add_attn)
+        print(f"-> loading {args.weights}")
+        data = Document2Graph(name='FUNSD TRAIN', src_path=FUNSD_TRAIN)
+        model = sm.get_model(num_feats, num_classes)
         model.load_state_dict(torch.load(ROOT / args.weights))
         model.to(device)
     
@@ -95,7 +94,7 @@ def entity_labeling(args):
     print("\n### TESTING ###")
 
     #? test
-    test_data = DocumentGraphs(name='FUNSD TEST', src_path=FUNSD_TEST, add_embs=args.add_embs)
+    test_data = Document2Graph(name='FUNSD TEST', src_path=FUNSD_TEST)
     test_data.get_info()
     mean_test_acc, f1 = evaluate(model, test_data.graphs, device)
 
@@ -107,7 +106,7 @@ def entity_labeling(args):
     else: feat = 'bbox'
 
     #? if skipping training, no need to save anything
-    results = {'model': config.MODEL.name, 'net-params': tp, 'features': feat, 'val-loss': stopper.best_val_loss, 'f1-scores': f1}
+    results = {'model': sm.get_name(), 'net-params': sm.get_total_params(), 'features': feat, 'val-loss': stopper.best_val_loss, 'f1-scores': f1}
     if not args.test: save_test_results(train_name, results)
     return
 
@@ -119,7 +118,7 @@ def entity_linking():
     #TODO
     return
 
-def train(args):
+def train_funsd(args):
 
     if args.task == 'elab':
         entity_labeling(args)
@@ -128,8 +127,8 @@ def train(args):
     elif args.task == 'wgrp':
         word_grouping(args)
     else:
-        raise "Task selected does not exists. Enter:\
+        raise Exception("Task selected does not exists. Enter:\
             - 'elab': entity labeling\
             - 'elin': entity linking\
-            - 'wgrp': word grouping"
+            - 'wgrp': word grouping")
     return

@@ -1,9 +1,10 @@
 # doc2graph - Documents transformed to Graphs
+
 - [doc2graph - Documents transformed to Graphs](#doc2graph---documents-transformed-to-graphs)
   - [Info](#info)
   - [Install](#install)
+  - [Preprocessing settings](#preprocessing-settings)
   - [Training](#training)
-  - [Results](#results)
 
 ## Info
 Library to convert documents to graphs and perform several tasks on different datasets, like KIE on FUNSD.
@@ -21,8 +22,17 @@ pip install dgl-cu113 dglgo -f https://data.dgl.ai/wheels/repo.html
 python -m spacy download en_core_web_sm
 ```
 
+## Preprocessing settings
+The project can be customized either changing directly config yaml files or providing these flags when calling `src/main.py`.
+ - --add_embs: True / False (to add textual features to graph nodes)
+ - --add_eweights:True / False (to add layout features to graph edges)
+ - --add_visual: True / False (to add visual features to graph nodes)
+ - --edge_type: (string) fully, knn or visibility to change the kind of connectivity
+ - --src_data: (string) FUNSD, NAF, SANKET or CUSTOM
+ - --src_type: (string) img, pdf if src_data is CUSTOM
+
 ## Training
-1. To download data,
+1. To download data and init project,
 ```
 python src/main.py --init
 ```
@@ -32,7 +42,5 @@ python src/main.py
 ```
 3. To test a trained **GCN** model for **Entity Labeling** on FUNSD (using GPU):
 ```
-python src/main.py --gpu 0 --config gcn --test -w output/weights/gcn-1651069965.pt
+python src/main.py --gpu 0 --model gcn --test -w output/weights/gcn-1651069965.pt
 ```
-
-## Results

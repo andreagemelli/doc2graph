@@ -1,6 +1,5 @@
 import os
-from src.paths import DATA, OUTPUTS, RESULTS, ROOT, WEIGHTS
-from src.utils.common import create_folder
+from src.paths import DATA
 import requests
 import zipfile
 from git import Repo
