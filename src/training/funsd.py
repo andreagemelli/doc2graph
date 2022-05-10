@@ -9,7 +9,7 @@ from src.data.dataloader import Document2Graph
 from src.paths import ROOT, FUNSD_TRAIN, FUNSD_TEST
 from src.training.models import SetModel
 from src.utils import get_config
-from src.training.utils import EarlyStopping, accuracy, evaluate, get_device, save_test_results, validate
+from src.training.utils import EarlyStopping, accuracy, evaluate, get_device, get_features, save_test_results, validate
 
 def entity_labeling(args):
 
@@ -20,7 +20,7 @@ def entity_labeling(args):
 
     if not args.test:
         ################* STEP 0: LOAD DATA ################
-        data = Document2Graph(name='FUNSD TRAIN', src_path=FUNSD_TRAIN)
+        data = Document2Graph(name='FUNSD TRAIN', src_path=FUNSD_TRAIN, device = device)
         data.get_info()
         num_feats = data.num_features
         num_classes = data.num_classes
@@ -86,7 +86,7 @@ def entity_labeling(args):
         ################* SKIP TRAINING ################
         print("\n### SKIP TRAINING ###")
         print(f"-> loading {args.weights}")
-        data = Document2Graph(name='FUNSD TRAIN', src_path=FUNSD_TRAIN)
+        data = Document2Graph(name='FUNSD TRAIN', src_path=FUNSD_TRAIN, device = device)
         model = sm.get_model(num_feats, num_classes)
         model.load_state_dict(torch.load(ROOT / args.weights))
         model.to(device)
@@ -95,7 +95,7 @@ def entity_labeling(args):
     print("\n### TESTING ###")
 
     #? test
-    test_data = Document2Graph(name='FUNSD TEST', src_path=FUNSD_TEST)
+    test_data = Document2Graph(name='FUNSD TEST', src_path=FUNSD_TEST, device = device)
     test_data.get_info()
     mean_test_acc, f1 = evaluate(model, test_data.graphs, device)
 
@@ -103,11 +103,10 @@ def entity_labeling(args):
     print("\n### RESULTS ###")
     print("Mean Test Accuracy {:.4f}".format(mean_test_acc))
     print(f"F1 Score (macro/micro): {f1}")
-    if args.add_embs: feat = 'text'
-    else: feat = 'bbox'
+    feat_n, feat_e = get_features(args.add_embs, args.add_visual, args.add_eweights)
 
     #? if skipping training, no need to save anything
-    results = {'model': sm.get_name(), 'net-params': sm.get_total_params(), 'features': feat, 'val-loss': stopper.best_score, 'f1-scores': f1}
+    results = {'model': sm.get_name(), 'net-params': sm.get_total_params(), 'features': feat_n, 'fedges': feat_e, 'val-loss': stopper.best_score, 'f1-scores': f1}
     if not args.test: save_test_results(train_name, results)
     return
 

@@ -4,6 +4,7 @@ import dgl.function as fn
 from dgl.nn import GATConv
 import math
 import torch.nn.functional as F
+import torchvision
 
 from src.paths import MODELS
 from src.utils import get_config
@@ -19,7 +20,7 @@ class SetModel():
         return self.name
     
     def get_total_params(self):
-        self.total_params
+        return self.total_params
 
     def get_model(self, num_features, num_classes):
         """Return the DGL model defined in the setting file
@@ -127,10 +128,8 @@ class GcnSAGELayer(nn.Module):
         if not self.use_pp:
             norm = self.get_norm(g)
             g.ndata['h'] = h
-            # g.update_all(fn.u_mul_e('h', 'feat', 'm'),
-            #              fn.sum(msg='m', out='h'))
-            g.update_all(fn.copy_u('h', 'm'),
-                         fn.sum(msg='m', out='h'))
+            g.update_all(fn.u_mul_e('h', 'feat', 'm'),
+                        fn.sum(msg='m', out='h'))
             ah = g.ndata.pop('h')
             h = self.concat(h, ah, norm)
 
@@ -169,6 +168,7 @@ class GcnSAGE(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.n_layers = n_layers
         self.add_attn = add_attn
+        # self.fc = nn.Linear()
 
         # input layer
         self.layers.append(GcnSAGELayer(in_feats, n_hidden, activation=activation,
@@ -186,6 +186,11 @@ class GcnSAGE(nn.Module):
             self.layers.append(GATConv(n_hidden, n_classes, num_heads=1))
 
     def forward(self, g, feat): #, padding=False):
+        # TODO add FCN
+        # x = feat[:n] where n is the length of geometric features
+        # x = self.fc(x)
+        # h = torch.cat(x, feat[n:])
+        
         h = feat
                 
         # h = self.dropout(h)
@@ -198,3 +203,57 @@ class GcnSAGE(nn.Module):
         else:
             h = self.layers[-1](g, h)
             return h, None
+
+#TODO
+#! implement this method to train end-to-end
+# class Visual_GcnSAGE(nn.Module):
+#     def __init__(self,
+#                  in_feats,
+#                  n_hidden,
+#                  n_classes,
+#                  n_layers,
+#                  activation,
+#                  dropout,
+#                  use_pp=False,
+#                  add_attn=False):
+#         super(GcnSAGE, self).__init__()
+#         self.backbone = torchvision.models.resnet50(pretrained=False)
+#         self.layers = nn.ModuleList()
+#         self.dropout = nn.Dropout(dropout)
+#         self.n_layers = n_layers
+#         self.add_attn = add_attn
+
+#         self.backbone = torch.nn.Sequential(*self.backbone.children[:-2])
+
+#         # input layer
+#         self.layers.append(GcnSAGELayer(in_feats, n_hidden, activation=activation,
+#                                         dropout=dropout, use_pp=use_pp, use_lynorm=True))
+#         # hidden layers
+#         for i in range(1, n_layers - 1):
+#             self.layers.append(
+#                 GcnSAGELayer(n_hidden, n_hidden, activation=activation, dropout=dropout,
+#                             use_pp=False, use_lynorm=True))
+#         # output layer
+#         if not self.add_attn:
+#             self.layers.append(GcnSAGELayer(n_hidden, n_classes, activation=None,
+#                                         dropout=False, use_pp=False, use_lynorm=False))
+#         else:
+#             self.layers.append(GATConv(n_hidden, n_classes, num_heads=1))
+
+#     def forward(self, img, bboxs, g): #, padding=False):
+#         # TODO
+#         # https://pytorch.org/vision/stable/generated/torchvision.ops.roi_align.html?highlight=roi
+#         # # rescale img to fixed
+#         # visual_emb = self.backbone(img) # output [batch, canali, dim1, dim2]
+#         # h = torchvision.ops.roi_align(visual_emb, bboxes, scaling(image->map))
+                
+#         # h = self.dropout(h)
+#         for l in range(self.n_layers - 1):
+#             h = self.layers[l](g, h)
+        
+#         if self.add_attn:
+#             h, a = self.layers[-1](g, h, True)
+#             return h.mean(1), a
+#         else:
+#             h = self.layers[-1](g, h)
+#             return h, None

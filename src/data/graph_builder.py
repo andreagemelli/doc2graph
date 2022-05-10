@@ -39,8 +39,8 @@ class GraphBuilder():
     def __fully_connected(self, ids : list):
         u, v = list(), list()
         for id in ids:
-            u.extend([id for i in range(len(ids))])
-            v.extend([i for i in range(len(ids))])
+            u.extend([id for i in range(len(ids)) if i != id])
+            v.extend([i for i in range(len(ids)) if i != id])
         return torch.tensor(u), torch.tensor(v)
 
     def __fromIMG():
@@ -53,6 +53,8 @@ class GraphBuilder():
 
     def __fromNAF():
         #TODO
+        #! clue: use 'isBlank' info as features (categorical encoding)
+        #! import also 'types' as node labels (if we can, we perform also entity recognition)
         return
 
     def __fromFUNSD(self, src : str):
@@ -62,7 +64,7 @@ class GraphBuilder():
         features = {'images': [], 'texts': [], 'boxs': []}
         for file in os.listdir(os.path.join(src, 'annotations')):
             
-            img = Image.open(os.path.join(src, 'images', f'{file.split(".")[0]}.png'))
+            img = Image.open(os.path.join(src, 'images', f'{file.split(".")[0]}.png')).convert('RGB')
             features['images'].append(img)
 
             with open(os.path.join(src, 'annotations', file), 'r') as f:

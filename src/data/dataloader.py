@@ -10,7 +10,7 @@ class Document2Graph(data.Dataset):
     """This class convert documents (both images or pdfs) into graph structures.
     """
 
-    def __init__(self, name : str, src_path : str) -> None:
+    def __init__(self, name : str, src_path : str, device = int) -> None:
         """
         Args:
             src_type (str): should be one of the following: ['gt', 'img', 'pdf']
@@ -25,7 +25,7 @@ class Document2Graph(data.Dataset):
         self.cfg_preprocessing = get_config('preprocessing')
         self.src_data = self.cfg_preprocessing.LOADER.src_data
         self.gb = GraphBuilder()
-        self.fb = FeatureBuilder()
+        self.fb = FeatureBuilder(device)
 
         # get graphs
         self.graphs, self.labels = self.docs2graphs()

@@ -182,3 +182,19 @@ def get_device(value : int) -> str:
         return 'cpu'
     else: 
         return 'cuda:{}'.format(value)
+
+def get_features(text, visual, edges):
+    feat_n = 'bbox'
+    feat_e = 'false'
+
+    if text and visual:
+        feat_n = 'all'
+    elif text:
+        feat_n = 'text'
+    elif visual:
+        feat_n = 'visual'
+    
+    if edges:
+        feat_e = 'true'
+        
+    return feat_n, feat_e

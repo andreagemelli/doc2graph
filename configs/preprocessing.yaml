@@ -1,7 +1,7 @@
 FEATURES:
-  add_embs: false
-  add_eweights: false
-  add_visual: false
+  add_embs: true
+  add_eweights: true
+  add_visual: true
 GRAPHS:
   data_type: img
   edge_type: fully
