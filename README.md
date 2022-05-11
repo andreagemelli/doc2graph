@@ -19,7 +19,7 @@ Then, install [torch](https://pytorch.org/get-started/locally/), [dgl](https://w
 ```
 pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
 pip install dgl-cu113 dglgo -f https://data.dgl.ai/wheels/repo.html
-python -m spacy download en_core_web_sm
+python -m spacy download en_core_web_lg
 ```
 
 ## Settings
@@ -28,8 +28,8 @@ The project can be customized either changing directly `configs/base.yaml` file 
  - --add_eweights:True / False (to add layout features to graph edges)
  - --add_visual: True / False (to add visual features to graph nodes)
  - --edge_type: (string) fully, knn or visibility to change the kind of connectivity
- - --src_data: (string) FUNSD, NAF, SANKET or CUSTOM
- - --src_type: (string) img, pdf if src_data is CUSTOM
+ - --src_data: (string) FUNSD, NAF or CUSTOM
+ - --src_type: (string) img, pdf [if src_data is CUSTOM]
 
 Change directly `configs/train.yaml` for training settings or create your own model copying `configs/models/gcn.yaml`.
 

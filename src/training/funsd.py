@@ -22,7 +22,7 @@ def entity_labeling(args):
         ################* STEP 0: LOAD DATA ################
         data = Document2Graph(name='FUNSD TRAIN', src_path=FUNSD_TRAIN, device = device)
         data.get_info()
-        num_feats = data.num_features
+        num_feats = 200 # data.num_features 100
         num_classes = data.num_classes
         
         #! Not easy

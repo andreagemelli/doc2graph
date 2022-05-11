@@ -21,8 +21,6 @@ class GraphBuilder():
             return self.__fromFUNSD(src_path)
         elif src_data == 'NAF':
             return self.__fromNAF()
-        elif src_data == 'SANKET':
-            return self.__fromSANKET()
         elif src_data == 'CUSTOM':
             if self.data_type == 'img':
                 return self.__fromIMG()
@@ -31,7 +29,7 @@ class GraphBuilder():
             else:
                 raise Exception('GraphBuilder exception: data type invalid. Choose from ["img", "pdf"]')
         else:
-            raise Exception('GraphBuilder exception: source data invalid. Choose from ["FUNSD", "NAF", "SANKET", "CUSTOM"]')
+            raise Exception('GraphBuilder exception: source data invalid. Choose from ["FUNSD", "NAF", "CUSTOM"]')
     
     def get_info(self):
         print(f"-> edge_type: {self.edge_type[0]}")
@@ -94,7 +92,3 @@ class GraphBuilder():
             graphs.append(g), labels.append(g_labels)
 
         return graphs, labels, features
-    
-    def __fromSANKET():
-        # TODO sanket. Historical dataset loading
-        pass

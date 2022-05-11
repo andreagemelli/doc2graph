@@ -1,7 +1,6 @@
 import argparse
 from src.data.download import get_data
 from src.training.funsd import train_funsd
-from src.training.sanket import train_sanket
 from src.utils import project_tree, set_preprocessing
 
 def main():
@@ -19,7 +18,7 @@ def main():
     parser.add_argument('--add-eweights', action="store_true",
                         help="add edge features to graphs")
     parser.add_argument("--src-data", type=str, default='FUNSD',
-                        help="which data source to use. It can be FUNSD, NAF, SANKET or CUSTOM")
+                        help="which data source to use. It can be FUNSD, NAF or CUSTOM")
     parser.add_argument("--data-type", type=str, default='img',
                         help="if src-data is CUSTOM, define the data source type: img or pdf.")
     parser.add_argument("--edge-type", type=str, default='fully',
@@ -50,8 +49,6 @@ def main():
             if args.test and args.weights == None:
                 raise Exception("Provide a weights file relative path! Or train a model first.")
             train_funsd(args)
-        elif args.src_data == 'SANKET':
-            train_sanket(args)
 
 if __name__ == '__main__':
     main()

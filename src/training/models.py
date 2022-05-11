@@ -168,7 +168,11 @@ class GcnSAGE(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.n_layers = n_layers
         self.add_attn = add_attn
-        # self.fc = nn.Linear()
+        self.fcg = nn.Linear(4, 100)
+        self.fcs = nn.Linear(300, 100)
+        self.fcr = nn.Linear(512, 100)
+        self.actt = nn.LeakyReLU()
+        self.norm = nn.LayerNorm(100)
 
         # input layer
         self.layers.append(GcnSAGELayer(in_feats, n_hidden, activation=activation,
@@ -190,8 +194,19 @@ class GcnSAGE(nn.Module):
         # x = feat[:n] where n is the length of geometric features
         # x = self.fc(x)
         # h = torch.cat(x, feat[n:])
-        
-        h = feat
+        # print(feat.shape)
+        fg = self.fcg(feat[:,:4])
+        fg = self.norm(fg)
+        fg = self.actt(fg)
+        # print(fg.shape)
+
+        fs = self.fcs(feat[:,4:])
+        fs = self.norm(fs)
+        fs = self.actt(fs)
+        # print(fs.shape)
+
+        h = torch.cat((fg, fs), 1)
+        # print(h.shape)
                 
         # h = self.dropout(h)
         for l in range(self.n_layers - 1):

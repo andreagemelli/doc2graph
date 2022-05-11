@@ -20,7 +20,8 @@ class FeatureBuilder():
         self.add_eweights = self.cfg_preprocessing.FEATURES.add_eweights
         self.device = d
         if self.add_embs: 
-            self.text_embedder = spacy.load('en_core_web_sm')
+            # self.text_embedder = spacy.load('en_core_web_sm')
+            self.text_embedder = spacy.load('en_core_web_lg')
         if self.add_visual: 
             self.convert_tensor = transforms.ToTensor()
             self.visual_embedder = torchvision.models.resnet18(pretrained=True)
