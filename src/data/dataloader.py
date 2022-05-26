@@ -1,6 +1,6 @@
 from src.data.feature_builder import FeatureBuilder
 from src.data.graph_builder import GraphBuilder
-from src.utils import get_config
+from src.amazing_utils import get_config
 import torch
 import torch.utils.data as data
 import os
@@ -10,12 +10,12 @@ class Document2Graph(data.Dataset):
     """This class convert documents (both images or pdfs) into graph structures.
     """
 
-    def __init__(self, name : str, src_path : str, device = int) -> None:
+    def __init__(self, name : str, src_path : str, device = str) -> None:
         """
         Args:
             src_type (str): should be one of the following: ['gt', 'img', 'pdf']
             src_path (str): path to folder containing documents
-            add_embs (bool): If True, use Spacy to convert text contents to word embeddings
+            device (str): device to use. can be 'cpu' or 'cuda:n'
         """
 
         # initialize class
@@ -28,16 +28,29 @@ class Document2Graph(data.Dataset):
         self.fb = FeatureBuilder(device)
 
         # get graphs
-        self.graphs, self.labels = self.docs2graphs()
+        self.graphs, self.node_labels, self.edge_labels = self.__docs2graphs()
 
-        # Labels to numeric value
-        if self.labels:
-            self.unique_labels = np.unique(self.labels[0])
-            self.num_classes = len(self.unique_labels)
-            self.num_features = self.graphs[0].ndata['feat'].shape[1]
+        # LABELS to numeric value
+        # NODES
+        if self.node_labels:
+            self.node_unique_labels = np.unique(np.array([l for nl in self.node_labels for l in nl]))
+            self.node_num_classes = len(self.node_unique_labels)
+            self.node_num_features = self.graphs[0].ndata['feat'].shape[1]
         
-            for idx, g_labels in enumerate(self.labels):
-                self.graphs[idx].ndata['label'] = torch.tensor([np.where(target == self.unique_labels)[0][0] for target in g_labels])
+            for idx, labels in enumerate(self.node_labels):
+                self.graphs[idx].ndata['label'] = torch.tensor([np.where(target == self.node_unique_labels)[0][0] for target in labels])
+        
+        # EDGES
+        if self.edge_labels:
+            self.edge_unique_labels = np.unique(self.edge_labels[0])
+            self.edge_num_classes = len(self.edge_unique_labels)
+            try:
+                self.edge_num_features = self.graphs[0].edata['feat'].shape[1]
+            except:
+                self.edge_num_features = 0
+        
+            for idx, labels in enumerate(self.edge_labels):
+                self.graphs[idx].edata['label'] = torch.tensor([np.where(target == self.edge_unique_labels)[0][0] for target in labels])
     
     def __getitem__(self, index):
         # Return indexed graph
@@ -47,22 +60,22 @@ class Document2Graph(data.Dataset):
         # Return dataset length
         return len(self.graphs)
     
-    def docs2graphs(self):
+    def __docs2graphs(self):
         """It uses GraphBuilder and FeaturesBuilder objects to get graphs (and lables, if any) from source data.
 
         Returns:
             tuple: DGL Graph and label
         """
-        graphs, labels, features = self.gb.get_graph(self.src_path, self.src_data)
+        graphs, node_labels, edge_labels, features = self.gb.get_graph(self.src_path, self.src_data)
         self.fb.add_features(graphs, features)
-        return graphs, labels
+        return graphs, node_labels, edge_labels
     
     def label2class(self, label):
         # Converts the numeric label to the corresponding string
         return self.unique_labels[label]
     
     def get_info(self):
-        print(f"\n{self.name.upper()} dataset:\n-> graphs: {len(self.graphs)}\n-> labels: {self.unique_labels}\n-> num features: {self.num_features}")
+        print(f"\n{self.name.upper()} dataset:\n-> graphs: {len(self.graphs)}\n-> node labels: {self.node_unique_labels}\n-> edge labels: {self.edge_unique_labels}\n-> num features: {self.node_num_features}")
         self.gb.get_info()
         self.fb.get_info()
         print(f"-> graph example: {self.graphs[0]}")

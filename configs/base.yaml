@@ -5,7 +5,6 @@ LOADER:
   src_data:
     - FUNSD
     # - NAF
-    # - SANKET
     # - CUSTOM
 FEATURES:
   add_embs: False

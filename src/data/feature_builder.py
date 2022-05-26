@@ -1,6 +1,6 @@
-from src.data.utils import distance
-from src.training.utils import get_device
-from src.utils import get_config
+from src.data.amazing_utils import distance, get_histogram
+from src.training.amazing_utils import get_device
+from src.amazing_utils import get_config
 import spacy
 import torch
 import torchvision
@@ -32,9 +32,12 @@ class FeatureBuilder():
         for id, g in enumerate(graphs):
             # positional features
             size = features['images'][id].size
+            # filename = features['images'][id].filename
             scale = lambda rect, s : [rect[0]/s[0], rect[1]/s[1], rect[2]/s[0], rect[3]/s[1]] # scaling by img width and height
             feats = [scale(box, size) for box in features['boxs'][id]]
-            #TODO add width, heigth, % of symbols
+            
+            # simple embedding of the content
+            [feats[idx].extend(hist) for idx, hist in enumerate(get_histogram(features['texts'][id]))]
 
             # textual features
             if self.add_embs:

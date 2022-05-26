@@ -1,7 +1,8 @@
 import argparse
 from src.data.download import get_data
 from src.training.funsd import train_funsd
-from src.utils import project_tree, set_preprocessing
+from src.training.naf import train_naf
+from src.amazing_utils import project_tree, set_preprocessing
 
 def main():
     parser = argparse.ArgumentParser(description='Training')
@@ -11,13 +12,13 @@ def main():
                         help="download data and prepare folders")
     
     # preprocessing
-    parser.add_argument('--add-embs', action="store_true",
+    parser.add_argument('--add-embs', action="store_false",
                         help="add textual embeddings to graphs")
     parser.add_argument('--add-visual', action="store_true",
                         help="add visual features to graphs")
     parser.add_argument('--add-eweights', action="store_true",
                         help="add edge features to graphs")
-    parser.add_argument("--src-data", type=str, default='FUNSD',
+    parser.add_argument("--src-data", type=str, default='NAF',
                         help="which data source to use. It can be FUNSD, NAF or CUSTOM")
     parser.add_argument("--data-type", type=str, default='img',
                         help="if src-data is CUSTOM, define the data source type: img or pdf.")
@@ -49,6 +50,9 @@ def main():
             if args.test and args.weights == None:
                 raise Exception("Provide a weights file relative path! Or train a model first.")
             train_funsd(args)
+        elif args.src_data == 'NAF':
+            train_naf(args)
+
 
 if __name__ == '__main__':
     main()

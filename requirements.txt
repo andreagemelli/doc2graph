@@ -8,6 +8,9 @@ setuptools==59.2.0
 setuptools_git_versioning==1.9.2
 spacy==3.2.0
 python-dotenv==0.20.0
+gitpython==2.1.7
+gitdb2==3.0.1
+matplotlib==3.5.2
 # dgl==0.8.0.post1
 # dgl_cu113==0.7.2
 # torch==1.10.0+cu113

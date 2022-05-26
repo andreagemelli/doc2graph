@@ -33,6 +33,10 @@ The project can be customized either changing directly `configs/base.yaml` file 
 
 Change directly `configs/train.yaml` for training settings or create your own model copying `configs/models/gcn.yaml`.
 
+If you want to use FUDGE pretrained model to detect entities and get their visual features:
+- refer to [their github](https://github.com/herobd/FUDGE) for installation and weights download
+- replace `run.py` and `model/yolo_box_detector.py` scripts with our custom version (TODO: link download)
+
 ## Training
 1. To download data and init project,
 ```

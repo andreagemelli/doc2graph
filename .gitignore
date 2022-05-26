@@ -10,3 +10,6 @@ DATA
 _old
 *.env
 outputs
+FUDGE
+configs/preprocessing.yaml
+output_*
