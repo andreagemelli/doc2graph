@@ -1,7 +1,9 @@
 import os
 from itsdangerous import json
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, precision_recall_fscore_support, roc_auc_score
 import torch
+import torch.nn
+import torch.nn.functional as F
 import dgl
 from datetime import datetime
 import shutil
@@ -111,7 +113,7 @@ def save_test_results(filename : str, infos : dict) -> None:
         json.dump(infos, f)
     return
 
-def get_f1(logits : torch.Tensor, labels : torch.Tensor) -> tuple:
+def get_f1(logits : torch.Tensor, labels : torch.Tensor, per_class = False) -> tuple:
     """Returns Macro and Micro F1-score for given logits / labels.
 
     Args:
@@ -124,7 +126,26 @@ def get_f1(logits : torch.Tensor, labels : torch.Tensor) -> tuple:
     _, indices = torch.max(logits, dim=1)
     indices = indices.cpu().detach().numpy()
     labels = labels.cpu().detach().numpy()
-    return f1_score(labels, indices, average='macro'), f1_score(labels, indices, average='micro')
+    if not per_class:
+        return f1_score(labels, indices, average='macro'), f1_score(labels, indices, average='micro')
+    else:
+        return precision_recall_fscore_support(labels, indices, average=None)[2].tolist()
+
+def get_binary_accuracy_and_f1(scores, labels, per_class = False):
+
+    out = torch.nn.Sigmoid()
+    scores = torch.where(out(scores) > 0.5, 1, 0)
+    correct = torch.sum(scores == labels)
+    accuracy = correct.item() * 1.0 / len(labels)
+    classes = scores.detach().cpu().numpy()
+    labels = labels.cpu().numpy()
+
+    if not per_class:
+        f1 = f1_score(labels, classes, average='macro'), f1_score(labels, classes, average='micro')
+    else:
+        f1 = precision_recall_fscore_support(labels, classes, average=None)[2].tolist()
+    
+    return accuracy, f1
 
 def accuracy(logits : torch.Tensor, labels : torch.Tensor) -> float:
     """Accuracy of the model.
@@ -198,3 +219,19 @@ def get_features(text, visual, edges):
         feat_e = 'true'
         
     return feat_n, feat_e
+
+def compute_loss(pos_score, neg_score, device):
+    scores = torch.cat([pos_score, neg_score])
+    labels = torch.cat([torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])])
+    return F.binary_cross_entropy_with_logits(scores.to(device), labels.to(device))
+
+def compute_auc(pos_score, neg_score):
+    scores = torch.cat([pos_score, neg_score]).detach().cpu().numpy()
+    labels = torch.cat(
+        [torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])]).cpu().numpy()
+    return roc_auc_score(labels, scores)
+
+def compute_auc_all(scores, labels):
+    scores = scores.detach().cpu().numpy()
+    labels = labels.cpu().numpy()
+    return roc_auc_score(labels, scores)

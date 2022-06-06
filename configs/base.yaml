@@ -10,6 +10,7 @@ FEATURES:
   add_embs: False
   add_visual: False
   add_eweights: False
+  add_fudge: False
 GRAPHS:
   edge_type:
     - fully

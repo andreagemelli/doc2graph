@@ -6,12 +6,13 @@ import numpy as np
 import torch
 import json
 import os
+import math
 
 from src.paths import NAF
 
 
 def distance(rectA, rectB):
-    """Compute distance from two given bounding boxes
+    """Compute distance and angle from 0 from two given bounding boxes
     """
     
     # check relative position
@@ -23,26 +24,37 @@ def distance(rectA, rectB):
     vp_intersect = (rectA[0] <= rectB[2] and rectB[0] <= rectA[2]) # True if two rects "see" each other vertically, above or under
     hp_intersect = (rectA[1] <= rectB[3] and rectB[1] <= rectA[3]) # True if two rects "see" each other horizontally, right or left
     rect_intersect = vp_intersect and hp_intersect 
+
+    center = lambda rect: ((rect[2]+rect[0])/2, (rect[3]+rect[1])/2)
+
+    # evaluate reciprocal position
+    sc = center(rectA)
+    ec = center(rectB)
+    new_ec = (ec[0] - sc[0], ec[1] - sc[1])
+    angle = math.degrees(math.atan2(new_ec[1], new_ec[0])) % 360
     
     if rect_intersect:
-        return 0
+        return 0, angle
     elif top and left:
-        return int(sqrt((rectB[2] - rectA[0])**2 + (rectB[3] - rectA[1])**2))
+        a, b = (rectB[2] - rectA[0]), (rectB[3] - rectA[1])
+        return int(sqrt(a**2 + b**2)), angle
     elif left and bottom:
-        return int(sqrt((rectB[2] - rectA[0])**2 + (rectB[1] - rectA[3])**2))
+        a, b = (rectB[2] - rectA[0]), (rectB[1] - rectA[3])
+        return int(sqrt(a**2 + b**2)), angle
     elif bottom and right:
-        return int(sqrt((rectB[0] - rectA[2])**2 + (rectB[1] - rectA[3])**2))
+        a, b = (rectB[0] - rectA[2]), (rectB[1] - rectA[3])
+        return int(sqrt(a**2 + b**2)), angle
     elif right and top:
-        return int(sqrt((rectB[0] - rectA[2])**2 + (rectB[3] - rectA[1])**2))
+        a, b = (rectB[0] - rectA[2]), (rectB[3] - rectA[1])
+        return int(sqrt(a**2 + b**2)), angle
     elif left:
-        return (rectA[0] - rectB[2])
+        return (rectA[0] - rectB[2]), angle
     elif right:
-        return (rectB[0] - rectA[2])
+        return (rectB[0] - rectA[2]), angle
     elif bottom:
-        return (rectB[1] - rectA[3])
+        return (rectB[1] - rectA[3]), angle
     elif top:
-        return (rectA[1] - rectB[3])
-    else: return inf
+        return (rectA[1] - rectB[3]), angle
 
 def transform_image(img_path, scale_image=1.0):
 

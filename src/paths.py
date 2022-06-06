@@ -15,6 +15,7 @@ OUTPUTS = ROOT / 'outputs'
 WEIGHTS = OUTPUTS / 'weights'
 RUNS = OUTPUTS / 'runs'
 RESULTS = OUTPUTS / 'results'
+IMGS = OUTPUTS / 'images'
 
 # FUNSD
 FUNSD_TRAIN = DATA / 'FUNSD' / 'training_data'

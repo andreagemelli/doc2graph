@@ -35,15 +35,17 @@ def project_tree():
     create_folder(RESULTS)
     return
 
-def set_preprocessing(add_embs, add_visual, add_eweights, src_data, data_type, edge_type):
+def set_preprocessing(args):
     with open(CONFIGS / 'base.yaml') as fileobj:
         cfg_preprocessing = dict(yaml.safe_load(fileobj))
-    cfg_preprocessing['FEATURES']['add_embs'] = add_embs
-    cfg_preprocessing['FEATURES']['add_visual'] = add_visual
-    cfg_preprocessing['FEATURES']['add_eweights'] = add_eweights
-    cfg_preprocessing['LOADER']['src_data'] = src_data
-    cfg_preprocessing['GRAPHS']['data_type'] = data_type
-    cfg_preprocessing['GRAPHS']['edge_type'] = edge_type
+    cfg_preprocessing['FEATURES']['add_geom'] = args.add_geom
+    cfg_preprocessing['FEATURES']['add_embs'] = args.add_embs
+    cfg_preprocessing['FEATURES']['add_visual'] = args.add_visual
+    cfg_preprocessing['FEATURES']['add_eweights'] = args.add_eweights
+    cfg_preprocessing['FEATURES']['add_fudge'] = args.add_fudge
+    cfg_preprocessing['LOADER']['src_data'] = args.src_data
+    cfg_preprocessing['GRAPHS']['data_type'] = args.data_type
+    cfg_preprocessing['GRAPHS']['edge_type'] = args.edge_type
     # print(cfg_preprocessing)
 
     with open(CONFIGS / 'preprocessing.yaml', 'w') as f:

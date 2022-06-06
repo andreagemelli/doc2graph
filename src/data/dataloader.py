@@ -24,11 +24,11 @@ class Document2Graph(data.Dataset):
         if not os.path.isdir(self.src_path): raise Exception(f'src_path {src_path} does not exists\n -> please provide an existing path')
         self.cfg_preprocessing = get_config('preprocessing')
         self.src_data = self.cfg_preprocessing.LOADER.src_data
-        self.gb = GraphBuilder()
-        self.fb = FeatureBuilder(device)
+        self.GB = GraphBuilder()
+        self.FB = FeatureBuilder(device)
 
         # get graphs
-        self.graphs, self.node_labels, self.edge_labels = self.__docs2graphs()
+        self.graphs, self.node_labels, self.edge_labels, self.paths = self.__docs2graphs()
 
         # LABELS to numeric value
         # NODES
@@ -45,6 +45,7 @@ class Document2Graph(data.Dataset):
             self.edge_unique_labels = np.unique(self.edge_labels[0])
             self.edge_num_classes = len(self.edge_unique_labels)
             try:
+                # TODO do be changed
                 self.edge_num_features = self.graphs[0].edata['feat'].shape[1]
             except:
                 self.edge_num_features = 0
@@ -66,16 +67,34 @@ class Document2Graph(data.Dataset):
         Returns:
             tuple: DGL Graph and label
         """
-        graphs, node_labels, edge_labels, features = self.gb.get_graph(self.src_path, self.src_data)
-        self.fb.add_features(graphs, features)
-        return graphs, node_labels, edge_labels
+        graphs, node_labels, edge_labels, features = self.GB.get_graph(self.src_path, self.src_data)
+        self.feature_chunks = self.FB.add_features(graphs, features)
+        return graphs, node_labels, edge_labels, features['paths']
     
-    def label2class(self, label):
+    def label2class(self, label, node=True, edge=False):
         # Converts the numeric label to the corresponding string
-        return self.unique_labels[label]
+        if node:
+            return self.node_unique_labels[label]
+        elif edge:
+            return self.edge_unique_labels[label]
+        elif node and edge:
+            return self.node_unique_labels[label], self.edge_unique_labels[label]
     
-    def get_info(self):
+    def get_info(self, num_graph=0):
         print(f"\n{self.name.upper()} dataset:\n-> graphs: {len(self.graphs)}\n-> node labels: {self.node_unique_labels}\n-> edge labels: {self.edge_unique_labels}\n-> num features: {self.node_num_features}")
-        self.gb.get_info()
-        self.fb.get_info()
-        print(f"-> graph example: {self.graphs[0]}")
+        self.GB.get_info()
+        self.FB.get_info()
+        print(f"-> graph example: {self.graphs[num_graph]}")
+    
+    def balance(self, cls = 'none', indices = None):
+        cls = int(np.where(cls == self.edge_unique_labels)[0][0])
+        if indices is None:
+            for i, g in enumerate(self.graphs):
+                self.graphs[i] = self.GB.balance_edges(g, self.edge_num_classes, cls = cls)
+        else:
+            for id in indices:
+                self.graphs[id] = self.GB.balance_edges(self.graphs[id], self.edge_num_classes, cls = cls)
+    
+    def get_chunks(self):
+        return self.feature_chunks
+        

@@ -11,26 +11,32 @@ def main():
     parser.add_argument('--init', action="store_true",
                         help="download data and prepare folders")
     
-    # preprocessing
-    parser.add_argument('--add-embs', action="store_false",
+    # features
+    parser.add_argument('--add-geom', '-addG', action="store_true",
+                        help="add geometrical embeddings to graphs")
+    parser.add_argument('--add-embs', '-addT', action="store_true",
                         help="add textual embeddings to graphs")
-    parser.add_argument('--add-visual', action="store_true",
+    parser.add_argument('--add-visual', '-addV', action="store_true",
                         help="add visual features to graphs")
-    parser.add_argument('--add-eweights', action="store_true",
+    parser.add_argument('--add-eweights', '-addE', action="store_true",
                         help="add edge features to graphs")
-    parser.add_argument("--src-data", type=str, default='NAF',
+    parser.add_argument('--add-fudge', action="store_true",
+                        help="add FUDGE visual features to graphs")
+    # data
+    parser.add_argument("--src-data", type=str, default='FUNSD',
                         help="which data source to use. It can be FUNSD, NAF or CUSTOM")
     parser.add_argument("--data-type", type=str, default='img',
                         help="if src-data is CUSTOM, define the data source type: img or pdf.")
+    # graphs
     parser.add_argument("--edge-type", type=str, default='fully',
                         help="choose the kind of connectivity in the graph. It can be: fully, knn or visibility.")
 
     # training
-    parser.add_argument("--model", type=str, default='gcn',
-                        help="which model to use, which yaml file to load")
+    parser.add_argument("--model", type=str, default='edge',
+                        help="which model to use, which yaml file to load. GCN, EDGE")
     parser.add_argument("--gpu", type=int, default=-1,
                         help="which GPU to use. Set -1 to use CPU.")
-    parser.add_argument('--task', type=str, default='elab',
+    parser.add_argument('--task', type=str, default='elin',
                         help="Training task: 'elab', 'elin' or 'wgrp") 
     parser.add_argument('--test', action="store_true",
                         help="skip training")
@@ -38,6 +44,7 @@ def main():
                         help="provide a weights file relative path if testing")
          
     args = parser.parse_args()
+    print(args)
 
     if args.init:
         project_tree()
@@ -45,7 +52,7 @@ def main():
         print("Initialization completed!")
 
     else:
-        set_preprocessing(args.add_embs, args.add_visual, args.add_eweights, args.src_data, args.data_type, args.edge_type)
+        set_preprocessing(args)
         if args.src_data == 'FUNSD':
             if args.test and args.weights == None:
                 raise Exception("Provide a weights file relative path! Or train a model first.")
