@@ -1,9 +1,10 @@
 batch_size: 15
 epochs: 10000
-lr: 0.01
-weight_decay: 0.0005
+lr: 1e-3
+weight_decay: 1e-5
 val_size : 0.1
 optimizer: Adam # or AdamW, SGD - NOT YET IMPLEMENTED
 scheduler:
   - ReduceLROnPlateau # CosineAnnealingLR, None- NOT YET IMPLEMENTED
 stopper_metric: acc # loss or acc
+seed: 41

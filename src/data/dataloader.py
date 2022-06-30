@@ -1,10 +1,14 @@
-from src.data.feature_builder import FeatureBuilder
-from src.data.graph_builder import GraphBuilder
-from src.amazing_utils import get_config
+from random import randint
 import torch
 import torch.utils.data as data
 import os
 import numpy as np
+from PIL import Image, ImageDraw
+
+from src.data.feature_builder import FeatureBuilder
+from src.data.graph_builder import GraphBuilder
+from src.amazing_utils import get_config
+from src.paths import TRAIN_SAMPLES
 
 class Document2Graph(data.Dataset):
     """This class convert documents (both images or pdfs) into graph structures.
@@ -38,7 +42,7 @@ class Document2Graph(data.Dataset):
             self.node_num_features = self.graphs[0].ndata['feat'].shape[1]
         
             for idx, labels in enumerate(self.node_labels):
-                self.graphs[idx].ndata['label'] = torch.tensor([np.where(target == self.node_unique_labels)[0][0] for target in labels])
+                self.graphs[idx].ndata['label'] = torch.tensor([np.where(target == self.node_unique_labels)[0][0] for target in labels], dtype=torch.int64)
         
         # EDGES
         if self.edge_labels:
@@ -51,7 +55,7 @@ class Document2Graph(data.Dataset):
                 self.edge_num_features = 0
         
             for idx, labels in enumerate(self.edge_labels):
-                self.graphs[idx].edata['label'] = torch.tensor([np.where(target == self.edge_unique_labels)[0][0] for target in labels])
+                self.graphs[idx].edata['label'] = torch.tensor([np.where(target == self.edge_unique_labels)[0][0] for target in labels], dtype=torch.int64)
     
     def __getitem__(self, index):
         # Return indexed graph
@@ -81,7 +85,7 @@ class Document2Graph(data.Dataset):
             return self.node_unique_labels[label], self.edge_unique_labels[label]
     
     def get_info(self, num_graph=0):
-        print(f"\n{self.name.upper()} dataset:\n-> graphs: {len(self.graphs)}\n-> node labels: {self.node_unique_labels}\n-> edge labels: {self.edge_unique_labels}\n-> num features: {self.node_num_features}")
+        print(f"\n{self.name.upper()} dataset:\n-> graphs: {len(self.graphs)}\n-> node labels: {self.node_unique_labels}\n-> edge labels: {self.edge_unique_labels}\n-> node features: {self.node_num_features}")
         self.GB.get_info()
         self.FB.get_info()
         print(f"-> graph example: {self.graphs[num_graph]}")
@@ -97,4 +101,27 @@ class Document2Graph(data.Dataset):
     
     def get_chunks(self):
         return self.feature_chunks
+    
+    def print_graph(self, num=None, labels_ids=None, name='doc_graph'):
+        if num is None: num = randint(0, self.__len__()-1)
+        graph = self.graphs[num]
+        graph_path = self.paths[num]
+        graph_img = Image.open(graph_path).convert('RGB')
+        if labels_ids is None: labels_ids = graph.edata['label'].nonzero().flatten().tolist()
+        center = lambda rect: ((rect[2]+rect[0])/2, (rect[3]+rect[1])/2)
+        graph_draw = ImageDraw.Draw(graph_img)
+        w, h = graph_img.size
+        boxs = graph.ndata['geom'][:, :4].tolist()
+        boxs = [[box[0]*w, box[1]*h, box[2]*w, box[3]*h] for box in boxs]
+        for box in boxs:
+            graph_draw.rectangle(box, outline='blue', width=2)
+        u,v = graph.edges()
+        for id in labels_ids:
+            sc = center(boxs[u[id]])
+            ec = center(boxs[v[id]])
+            graph_draw.line((sc,ec), fill='violet', width=3)
+            graph_draw.ellipse([(sc[0]-4,sc[1]-4), (sc[0]+4,sc[1]+4)], fill = 'green', outline='black')
+            graph_draw.ellipse([(ec[0]-4,ec[1]-4), (ec[0]+4,ec[1]+4)], fill = 'red', outline='black')
+
+        graph_img.save(TRAIN_SAMPLES / f'{name}.png')
         

@@ -4,6 +4,7 @@ __pycache__/
 *.py[cod]
 *.eggs
 build
+.vscode
 
 #user-defined
 DATA
@@ -13,3 +14,4 @@ outputs
 FUDGE
 configs/preprocessing.yaml
 esempi
+examples

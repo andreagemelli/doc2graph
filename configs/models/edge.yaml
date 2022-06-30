@@ -1,6 +1,6 @@
 name: EDGE
-dropout: 0.0
-hidden_dim: 64
+dropout: 0.2
 num_layers: 1
-attn: False
-out_chunks: 100
+hidden_dim: 100
+out_chunks: 500
+doProject: True

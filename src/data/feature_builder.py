@@ -9,7 +9,7 @@ import spacy
 import torch
 import torchvision
 from torchvision import transforms
-from src.paths import FUDGE, ROOT
+from src.paths import FUDGE, ROOT, TRAINING
 import sys
 import os
 from src.data.amazing_utils import transform_image
@@ -17,6 +17,8 @@ sys.path.append(os.path.join(ROOT,'FUDGE'))
 from FUDGE.run import detect_boxes
 from tqdm import tqdm
 from PIL import Image, ImageDraw
+import segmentation_models_pytorch as smp
+import torchvision.transforms.functional as tvF
 
 class FeatureBuilder():
 
@@ -26,7 +28,6 @@ class FeatureBuilder():
         Args:
             d (_type_): _description_
         """
-        #TODO add add_geom to pipeline from main
         self.cfg_preprocessing = get_config('preprocessing')
         self.add_geom = self.cfg_preprocessing.FEATURES.add_geom
         self.add_embs = self.cfg_preprocessing.FEATURES.add_embs
@@ -38,18 +39,17 @@ class FeatureBuilder():
         if self.add_embs:
             self.text_embedder = spacy.load('en_core_web_lg')
 
-        if self.add_visual: 
-            self.convert_tensor = transforms.ToTensor()
-            self.visual_embedder = torchvision.models.resnet18(pretrained=True)
-            self.visual_embedder = torch.nn.Sequential(*(list(self.visual_embedder.children())[:-1])).to(self.device)
-            self.visual_embedder.eval()
+        if self.add_visual:
+            self.visual_embedder = smp.Unet(encoder_name="resnet18", encoder_weights=None, in_channels=1, classes=4)
+            self.visual_embedder.load_state_dict(torch.load(TRAINING / 'unet.pth')['weights'])
+            self.visual_embedder = self.visual_embedder.to(d)
 
         if self.add_fudge:
             self.fudge = FUDGE / 'saved/NAF_detect_augR_staggerLighter.pth'
     
     def add_features(self, graphs, features):
 
-        rand_id = random.randint(0, len(graphs)-1)
+        # rand_id = random.randint(0, len(graphs)-1)
 
         for id, g in enumerate(tqdm(graphs, desc='adding features:')):
 
@@ -57,6 +57,7 @@ class FeatureBuilder():
             size = Image.open(features['paths'][id]).size
             scale = lambda rect, s : [rect[0]/s[0], rect[1]/s[1], rect[2]/s[0], rect[3]/s[1]] # scaling by img width and height
             feats = [[] for _ in range(len(features['boxs'][id]))]
+            geom = [scale(box, size) for box in features['boxs'][id]]
             chunks = []
             
             # 'geometrical' features
@@ -67,8 +68,8 @@ class FeatureBuilder():
             # textual features
             if self.add_embs:
                 # HISTOGRAM OF TEXT
-                [feats[idx].extend(hist) for idx, hist in enumerate(get_histogram(features['texts'][id]))]
-                chunks.append(4)
+                # [feats[idx].extend(hist) for idx, hist in enumerate(get_histogram(features['texts'][id]))]
+                # chunks.append(4)
                 # LANGUAGE MODEL (SPACY)
                 [feats[idx].extend(self.text_embedder(features['texts'][id][idx]).vector) for idx, _ in enumerate(feats)]
                 chunks.append(len(self.text_embedder(features['texts'][id][0]).vector))
@@ -77,13 +78,16 @@ class FeatureBuilder():
             if self.add_visual:
                 # https://pytorch.org/vision/stable/generated/torchvision.ops.roi_align.html?highlight=roi
                 img = Image.open(features['paths'][id])
-                img = self.convert_tensor(img).unsqueeze(dim=0).to(self.device)
-                visual_emb = self.visual_embedder(img) # output [batch, canali, dim1, dim2]
+                img = torchvision.transforms.functional.resize(img, size=(512, 512))
+                visual_emb = self.visual_embedder.encoder(tvF.to_tensor(img).unsqueeze_(0).to(self.device)) # output [batch, canali, dim1, dim2]
                 bboxs = [torch.Tensor(b) for b in features['boxs'][id]]
                 bboxs = [torch.stack(bboxs, dim=0).to(self.device)]
-                scale = min(size[1] / visual_emb.shape[2] , size[0] / visual_emb.shape[3])
-                #! output_size set for dimensionality and sapling_ratio at random.
-                h = torchvision.ops.roi_align(input=visual_emb, boxes=bboxs, spatial_scale=1/scale, output_size=1, sampling_ratio=3)
+                h = [torchvision.ops.roi_align(input=ve, boxes=bboxs, spatial_scale=1/ min(size[1] / ve.shape[2] , size[0] / ve.shape[3]), output_size=1) for ve in visual_emb[1:]]
+                h = torch.cat(h, dim=1)
+                #for ve in visual_embs:
+                #    scale = min(size[1] / visual_emb.shape[2] , size[0] / visual_emb.shape[3])
+                #    #! output_size set for dimensionality and sapling_ratio at random.
+                #    h = torchvision.ops.roi_align(input=visual_emb, boxes=bboxs, spatial_scale=1/scale, output_size=1)
 
                 # VISUAL FEATURES (RESNET-IMAGENET)
                 [feats[idx].extend(torch.flatten(h[idx]).tolist()) for idx, _ in enumerate(feats)]
@@ -135,16 +139,20 @@ class FeatureBuilder():
                     angles.append(angle/360)
                 
                 m = max(distances)
-                g.edata['angl'] = torch.tensor(angles, dtype=torch.float32)
+                polar_coordinates = torch.tensor([[a, (1-d/m)] for a, d in zip(angles, distances)], dtype=torch.float32)
+                g.edata['feat'] = polar_coordinates
 
             else:
-                distances = [0.0 for _ in range(g.number_of_edges())]
+                distances = ([0.0 for _ in range(g.number_of_edges())])
                 m = 1
 
-            # add features to graph
+            g.ndata['geom'] = torch.tensor(geom, dtype=torch.float32)
             g.ndata['feat'] = torch.tensor(feats, dtype=torch.float32)
-            g.edata['dist'] = torch.tensor([(1-d/m) for d in distances], dtype=torch.float32)
 
+            distances = torch.tensor([(1-d/m) for d in distances], dtype=torch.float32)
+            g.edata['weights'] = torch.where(distances > 0.9, torch.full_like(distances, 0.1), torch.zeros_like(distances))
+
+            #! DEBUG PURPOSES TO VISUALIZE RANDOM GRAPH IMAGE FROM DATASET
             if False:
                 if id == rand_id and self.add_eweights:
                     print("\n\n### EXAMPLE ###")

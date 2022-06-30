@@ -1,16 +1,20 @@
+from asyncore import write
 from datetime import datetime
 from sklearn.metrics import f1_score
 from sklearn.model_selection import ShuffleSplit
 import torch
-from random import shuffle
+from torch.nn import functional as F
+from random import shuffle, choice, seed
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import dgl
+from PIL import Image, ImageDraw
+from torch.utils.tensorboard import SummaryWriter
 
 from src.data.dataloader import Document2Graph
-from src.paths import ROOT, FUNSD_TRAIN, FUNSD_TEST, WEIGHTS
+from src.paths import ROOT, FUNSD_TRAIN, FUNSD_TEST, RUNS, WEIGHTS
 from src.training.models import SetModel
 from src.amazing_utils import get_config
-from src.training.amazing_utils import EarlyStopping, accuracy, compute_auc, compute_auc_all, compute_loss, evaluate, get_binary_accuracy_and_f1, get_device, get_f1, get_features, save_test_results, validate
+from src.training.amazing_utils import EarlyStopping, accuracy, compute_auc, compute_auc_2, compute_auc_all, compute_auc_mc, compute_crossentropy_loss, compute_loss_2, evaluate, get_binary_accuracy_and_f1, get_device, get_f1, get_features, save_test_results, validate
 
 def entity_labeling(args):
 
@@ -241,78 +245,109 @@ def link_prediction(args):
 
     # configs
     cfg_train = get_config('train')
+    seed(cfg_train.seed)
     device = get_device(args.gpu)
     sm = SetModel(name=args.model, device=device)
 
     if not args.test:
         ################* STEP 0: LOAD DATA ################
         data = Document2Graph(name='FUNSD TRAIN', src_path=FUNSD_TRAIN, device = device)
-        data.balance()
         data.get_info()
+        data.print_graph()
 
         ss = ShuffleSplit(n_splits=1, test_size=cfg_train.val_size, random_state=0)
         train_index, val_index = next(ss.split(data.graphs))
+        rand_tid = choice(train_index)
+        rand_vid = choice(val_index)
 
         # TRAIN
-        train_graph = dgl.batch([data.graphs[i] for i in train_index])
-        train_graph = train_graph.int().to(device)
-        pos_eids = (train_graph.edata['label'] == 1).nonzero().flatten().tolist()
-        train_g_pos = dgl.edge_subgraph(train_graph, pos_eids)
-        neg_eids = (train_graph.edata['label'] == 0).nonzero().flatten().tolist()
-        train_g_neg = dgl.edge_subgraph(train_graph, neg_eids)
-        # print(train_g_pos)
-        # print(train_g_neg)
-
-        val_graph = dgl.batch([data.graphs[i] for i in val_index])
-        val_graph = val_graph.int().to(device)
-        pos_eids = (val_graph.edata['label'] == 1).nonzero().flatten().tolist()
-        val_g_pos = dgl.edge_subgraph(val_graph, pos_eids)
-        neg_eids = (val_graph.edata['label'] == 0).nonzero().flatten().tolist()
-        val_g_neg = dgl.edge_subgraph(val_graph, neg_eids)
-
+        train_graphs = [data.graphs[i] for i in train_index]
+        tg = dgl.batch(train_graphs)
+        tg = tg.int().to(device)
+    
+        val_graphs = [data.graphs[i] for i in val_index]
+        vg = dgl.batch(val_graphs)
+        vg = vg.int().to(device)
+        
         ################* STEP 1: CREATE MODEL ################
-        model = sm.get_model([None, 1], data.get_chunks())
-        optimizer = torch.optim.Adam(model.parameters(), lr=cfg_train.lr, weight_decay=cfg_train.weight_decay)
-        scheduler = ReduceLROnPlateau(optimizer, 'min', patience=50, verbose=True, factor=0.05)
+        model = sm.get_model(None, 2, data.get_chunks())
+        optimizer = torch.optim.Adam(model.parameters(), lr=float(cfg_train.lr), weight_decay=float(cfg_train.weight_decay))
+        scheduler = ReduceLROnPlateau(optimizer, 'min', patience=1000, verbose=True, factor=0.1)
         e = datetime.now()
         train_name = args.model + f'-{e.strftime("%Y%m%d-%H%M")}'
-        stopper = EarlyStopping(model, name=train_name, metric=cfg_train.stopper_metric, patience=100)
+        stopper = EarlyStopping(model, name=train_name, metric=cfg_train.stopper_metric, patience=10000)
+        writer = SummaryWriter(log_dir=RUNS)
     
         ################* STEP 2: TRAINING ################
         print("\n### TRAINING ###")
-        print(f"-> Training samples: {train_graph.batch_size}")
-        print(f"-> Validation samples: {val_graph.batch_size}\n")
+        print(f"-> Training samples: {tg.batch_size}")
+        print(f"-> Validation samples: {vg.batch_size}\n")
 
         for epoch in range(cfg_train.epochs):
+
+            #* TRAINING
             model.train()
             
-            pos_feat = train_g_pos.ndata['feat'].to(device)
-            pos_score = model(train_g_pos, pos_feat)
-            neg_feat = train_g_neg.ndata['feat'].to(device)
-            neg_score = model(train_g_neg, neg_feat)
-            loss = compute_loss(pos_score, neg_score, device)
-            auc = compute_auc(pos_score, neg_score)
-            
-            # backward
+            scores = model(tg, tg.ndata['feat'].to(device))
+            # loss = compute_loss_2(scores.flatten().to(device), tg.edata['label'].to(device))
+            loss= compute_crossentropy_loss(scores.to(device), tg.edata['label'].to(device))
+            auc = compute_auc_mc(scores.to(device), tg.edata['label'].to(device))
+
             optimizer.zero_grad()
             loss.backward()
+            n = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
+            print("Gradient:", n.max())
             optimizer.step()
 
+            #* VALIDATION
             model.eval()
             with torch.no_grad():
-                val_pos_score = model(val_g_pos, val_g_pos.ndata['feat'].to(device))
-                val_neg_score = model(val_g_neg, val_g_neg.ndata['feat'].to(device))
-                val_loss = compute_loss(val_pos_score, val_neg_score, device)
-                val_auc = compute_auc(val_pos_score, val_neg_score)
+                val_scores = model(vg, vg.ndata['feat'].to(device))
+                # val_loss = compute_loss_2(val_scores.flatten().to(device), vg.edata['label'].to(device))
+                # val_loss = loss_fcn(val_scores.to(device), vg.edata['label'].to(device))
+                val_loss = compute_crossentropy_loss(val_scores.to(device), vg.edata['label'].to(device))
+                val_auc = compute_auc_mc(val_scores.to(device), vg.edata['label'].to(device))
+            
+            #* PRINTING IMAGEs
+            
+            start, end = 0, 0
+            for tid in train_index:
+                start = end
+                end += data.graphs[tid].num_edges()
+                if tid == rand_tid: break
 
+            # targets = torch.where(scores > 0, 1, 0)[start:end]
+            blu = F.softmax(scores[start:end], dim=1)
+            _, targets = torch.max(blu, dim=1)
+            kvp_ids = targets.nonzero().flatten().tolist()
+            data.print_graph(num=rand_tid, labels_ids=kvp_ids, name='train')
+            data.print_graph(num=rand_tid, name='train_labels')
+
+            v_start, v_end = 0, 0
+            for vid in val_index:
+                v_start = v_end
+                v_end += data.graphs[vid].num_edges()
+                if vid == rand_vid: break
+
+            #val_targets = torch.where(scores > 0, 1, 0)[v_start:v_end]
+            _, val_targets = torch.max(F.softmax(val_scores[v_start:v_end], dim=1), dim=1)
+            val_kvp_ids = val_targets.nonzero().flatten().tolist()
+            
+            data.print_graph(num=rand_vid, labels_ids=val_kvp_ids, name='val')
+            data.print_graph(num=rand_vid, name='val_labels')
+            
             scheduler.step(val_loss.item())
 
-            print("Epoch {:05d} | TrainLoss {:.4f} | TrainAUC {:.4f} | ValLoss {:.4f} | ValAUC {:.4f} |"
+            print("Epoch {:05d} | TrainLoss {:.4f} | TrainAUC-PR {:.4f} | ValLoss {:.4f} | ValAUC-PR {:.4f} |"
             .format(epoch, loss.item(), auc, val_loss.item(), val_auc))
             
             #* UPDATE
             if cfg_train.stopper_metric == 'loss' and stopper.step(val_loss.item()): break
             if cfg_train.stopper_metric == 'acc' and stopper.step(val_auc): break
+
+            writer.add_scalars('AUC-PR', {'train': auc, 'val': val_auc}, epoch)
+            writer.add_scalar('Loss/train', loss.item(), epoch)
+            writer.add_scalar('Loss/val', val_loss.item(), epoch)
         
         print("LOADING: ", train_name+'.pt')
         model.load_state_dict(torch.load(WEIGHTS / (train_name+'.pt')))
@@ -322,7 +357,7 @@ def link_prediction(args):
         print("\n### SKIP TRAINING ###")
         print(f"-> loading {args.weights}")
         data = Document2Graph(name='FUNSD TRAIN', src_path=FUNSD_TRAIN, device = device)
-        model = sm.get_model([None, 1], data.get_chunks())
+        model = sm.get_model(None, 1, data.get_chunks())
         model.load_state_dict(torch.load(WEIGHTS / args.weights))
     
     ################* STEP 3: TESTING ################
@@ -345,10 +380,41 @@ def link_prediction(args):
         neg_score = model(test_g_neg, test_g_neg.ndata['feat'].to(device))
         auc = compute_auc(pos_score, neg_score)
 
-        all_score = model(test_graph, test_graph.ndata['feat'].to(device))
-        all_auc = compute_auc_all(all_score, test_graph.edata['label'])
+        all_scores = model(test_graph, test_graph.ndata['feat'].to(device))
+        out = torch.nn.Sigmoid()
+        all_scores = out(all_scores)
+        all_auc, ot = compute_auc_all(all_scores, test_graph.edata['label'])
 
-        accuracy, f1 = get_binary_accuracy_and_f1(all_score, test_graph.edata['label'])
+        print(ot[0])
+        preds = torch.where(all_scores > ot[0], 1, 0)
+        test_graph.edata['preds'] = preds
+
+        accuracy, f1 = get_binary_accuracy_and_f1(preds, test_graph.edata['label'])
+        _, classes_f1 = get_binary_accuracy_and_f1(preds, test_graph.edata['label'], per_class=True)
+    
+    graphs = dgl.unbatch(test_graph)
+    target_graph = graphs[0]
+    targets = target_graph.edata['preds']
+    kvp = (targets == 1)
+    kvp_ids = kvp.nonzero().flatten().tolist()
+    
+    # ! PRINTING IMAGE
+    print(test_data.paths[0])
+    img = Image.open(test_data.paths[0]).convert('RGB')
+    draw = ImageDraw.Draw(img)
+    w, h = img.size
+    boxs = target_graph.ndata['geom'][:, :4].tolist()
+    boxs = [[box[0]*w, box[1]*h, box[2]*w, box[3]*h] for box in boxs]
+    for box in boxs:
+        draw.rectangle(box, outline='blue', width=2)
+    
+    center = lambda rect: ((rect[2]+rect[0])/2, (rect[3]+rect[1])/2)
+    u, v = target_graph.edges()
+    for edge in kvp_ids:
+        sb = boxs[u[edge]]
+        eb = boxs[v[edge]]
+        draw.line((center(sb), center(eb)), fill='violet', width=3)
+    img.save('test.png')
 
     ################* STEP 4: RESULTS ################
     print("\n### RESULTS ###")
@@ -356,13 +422,14 @@ def link_prediction(args):
     print("All AUC {:.4f}".format(all_auc))
     print("Accuracy {:.4f}".format(accuracy))
     print("F1 Score: Macro {:.4f} - Micro {:.4f}".format(f1[0], f1[1]))
-    # print(f"F1 Score (macro/micro): {macro} {micro}\n F1 per class: {classes_f1}")
-    # feat_n, feat_e = get_features(args.add_embs, args.add_visual, args.add_eweights)
+    print("F1 Classes: None {:.4f} - Pairs {:.4f}".format(classes_f1[0], classes_f1[1]))
 
-    # #? if skipping training, no need to save anything
-    # results = {'model': sm.get_name(), 'net-params': sm.get_total_params(), 'features': feat_n, 'fedges': feat_e, 'best_score': stopper.best_score, 'f1-scores': (macro, micro),
-    #         'classes': classes_f1}
-    # if not args.test: save_test_results(train_name, results)
+    if not args.test:
+        feat_n, feat_e = get_features(args.add_geom, args.add_embs, args.add_visual, args.add_eweights)
+        #? if skipping training, no need to save anything
+        results = {'model': sm.get_name(), 'net-params': sm.get_total_params(), 'features': feat_n, 'fedges': feat_e, 'best_score': stopper.best_score, 'f1-scores': (f1[0], f1[1]),
+                'classes': classes_f1}
+        save_test_results(train_name, results)
     return
 
 
@@ -381,3 +448,23 @@ def train_funsd(args):
             - 'elin': entity linking\
             - 'wgrp': word grouping")
     return
+
+#! OLD CODE
+# ! OLD BINARY LINK PREDICTION APPROACH
+        # pos_eids = (train_graph.edata['label'] == 1).nonzero().flatten().tolist()
+        # train_g_pos = dgl.edge_subgraph(train_graph, pos_eids)
+        # neg_eids = (train_graph.edata['label'] == 0).nonzero().flatten().tolist()
+        # train_g_neg = dgl.edge_subgraph(train_graph, neg_eids)
+# ! OLD BINARY LINK PREDICTION APPROACH
+        # pos_eids = (val_graph.edata['label'] == 1).nonzero().flatten().tolist()
+        # val_g_pos = dgl.edge_subgraph(val_graph, pos_eids)
+        # neg_eids = (val_graph.edata['label'] == 0).nonzero().flatten().tolist()
+        # val_g_neg = dgl.edge_subgraph(val_graph, neg_eids)
+
+        # neg_feat = train_g_neg.ndata['feat'].to(device)
+        # neg_score = model(train_g_neg, neg_feat)
+
+        # val_pos_score = model(val_g_pos, val_g_pos.ndata['feat'].to(device))
+        # val_neg_score = model(val_g_neg, val_g_neg.ndata['feat'].to(device))
+        # val_loss = compute_loss(val_pos_score, val_neg_score, device)
+        # val_auc = compute_auc(val_pos_score, val_neg_score)

@@ -51,7 +51,7 @@ class GraphBuilder():
             for _ in range(int((edge_targets != cls).sum()/2)):
                 indeces_to_save = [random.choice(indices_to_remove)]
                 edge = edges_list[indeces_to_save[0]]
-                indeces_to_save.append(edges_list.index([edge[1], edge[0]]))
+                # indeces_to_save.append(edges_list.index([edge[1], edge[0]]))
 
                 for index in sorted(indeces_to_save, reverse=True):
                     del indices_to_remove[indices_to_remove.index(index)]
@@ -136,10 +136,11 @@ class GraphBuilder():
             neighbors = list(set(neighbors))
             if node_index in neighbors:
                 neighbors.remove(node_index)
-            neighbors_distances = [distance(node_bbox, bboxs[n]) for n in neighbors]
+            neighbors_distances = [distance(node_bbox, bboxs[n])[0] for n in neighbors]
             for sd_num, sd_idx in enumerate(np.argsort(neighbors_distances)):
                 if sd_num < k:
                     # if neighbors_distances[sd_idx] <= self.config.PREPROCESS.max_dist and [node_index, neighbors[sd_idx]] not in edges:
+                    # print(node_index, sd_idx)
                     if [node_index, neighbors[sd_idx]] not in edges and [neighbors[sd_idx], node_index] not in edges:
                         edges.append([neighbors[sd_idx], node_index])
                         edges.append([node_index, neighbors[sd_idx]])
@@ -204,7 +205,7 @@ class GraphBuilder():
             node_ids = range(len(boxs))
             if self.edge_type == 'fully':
                 u, v = self.__fully_connected(node_ids)
-            elif self.edge_type == 'knn': 
+            elif self.edge_type == 'knn':
                 u,v = self.__knn(img.size, boxs)
             else:
                 raise Exception('Other edge types still under development.')
@@ -313,7 +314,6 @@ class GraphBuilder():
         graphs, node_labels, edge_labels = list(), list(), list()
         features = {'paths': [], 'texts': [], 'boxs': []}
         justOne = random.choice(os.listdir(os.path.join(src, 'adjusted_annotations'))).split(".")[0]
-        # justOne = '91939637'
 
         for file in tqdm(os.listdir(os.path.join(src, 'adjusted_annotations')), desc='Creating graphs:'):
             
@@ -344,18 +344,19 @@ class GraphBuilder():
             features['boxs'].append(boxs)
             
             # getting edges
-            node_ids = range(len(boxs))
             if self.edge_type == 'fully':
-                u, v = self.__fully_connected(node_ids)
+                u, v = self.__fully_connected(range(len(boxs)))
+            elif self.edge_type == 'knn': 
+                u,v = self.__knn(Image.open(img_path).size, boxs)
             else:
                 raise Exception('Other edge types still under development.')
             
             el = list()
             for e in zip(u, v):
                 edge = [e[0], e[1]]
-                reverse_edge = [e[1], e[0]]
+                # reverse_edge = [e[1], e[0]]
                 if edge in pair_labels: el.append('pair')
-                elif reverse_edge in pair_labels: el.append('pair')
+                # elif reverse_edge in pair_labels: el.append('pair')
                 else: el.append('none')
             edge_labels.append(el)
 
@@ -363,6 +364,7 @@ class GraphBuilder():
             g = dgl.graph((torch.tensor(u), torch.tensor(v)), num_nodes=len(boxs), idtype=torch.int32)
             graphs.append(g)
 
+            #! DEBUG PURPOSES TO VISUALIZE RANDOM GRAPH IMAGE FROM DATASET
             if False:
                 if justOne == file.split(".")[0]:
                     print("\n\n### EXAMPLE ###")
@@ -402,6 +404,8 @@ class GraphBuilder():
                         if labels[p] == int(np.where('pair' == edge_unique_labels)[0][0]): 
                             num_pair += 1
                             color = 'violet'
+                            draw_removed.ellipse([(sc[0]-4,sc[1]-4), (sc[0]+4,sc[1]+4)], fill = 'green', outline='black')
+                            draw_removed.ellipse([(ec[0]-4,ec[1]-4), (ec[0]+4,ec[1]+4)], fill = 'red', outline='black')
                         else: 
                             num_none += 1
                             color='gray'

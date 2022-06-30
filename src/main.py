@@ -13,11 +13,11 @@ def main():
     
     # features
     parser.add_argument('--add-geom', '-addG', action="store_true",
-                        help="add geometrical embeddings to graphs")
+                        help="add geometrical features to nodes")
     parser.add_argument('--add-embs', '-addT', action="store_true",
-                        help="add textual embeddings to graphs")
+                        help="add textual embeddings to nodes")
     parser.add_argument('--add-visual', '-addV', action="store_true",
-                        help="add visual features to graphs")
+                        help="add visual features to nodes")
     parser.add_argument('--add-eweights', '-addE', action="store_true",
                         help="add edge features to graphs")
     parser.add_argument('--add-fudge', action="store_true",
@@ -32,11 +32,11 @@ def main():
                         help="choose the kind of connectivity in the graph. It can be: fully, knn or visibility.")
 
     # training
-    parser.add_argument("--model", type=str, default='edge',
-                        help="which model to use, which yaml file to load. GCN, EDGE")
+    parser.add_argument("--model", type=str, default='GCN',
+                        help="which model to use, which yaml file to load. GCN, EDGE, GAT")
     parser.add_argument("--gpu", type=int, default=-1,
                         help="which GPU to use. Set -1 to use CPU.")
-    parser.add_argument('--task', type=str, default='elin',
+    parser.add_argument('--task', type=str, default='elab',
                         help="Training task: 'elab', 'elin' or 'wgrp") 
     parser.add_argument('--test', action="store_true",
                         help="skip training")

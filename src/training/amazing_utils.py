@@ -1,6 +1,11 @@
+from cProfile import label
 import os
+from pickletools import optimize
 from itsdangerous import json
-from sklearn.metrics import f1_score, precision_recall_fscore_support, roc_auc_score
+import pandas as pd
+import sklearn
+from sklearn.metrics import average_precision_score, f1_score, precision_recall_fscore_support, roc_auc_score, roc_curve
+from sklearn.utils import class_weight
 import torch
 import torch.nn
 import torch.nn.functional as F
@@ -8,6 +13,7 @@ import dgl
 from datetime import datetime
 import shutil
 import yaml
+import numpy as np
 
 from src.paths import CONFIGS, OUTPUTS, RESULTS, WEIGHTS
 
@@ -62,6 +68,7 @@ class EarlyStopping:
                 self.best_score = score
                 self.save_checkpoint()
                 self.counter = 0
+                
         else:
             raise Exception('EarlyStopping Error: metric provided not valid. Select between loss or acc')
 
@@ -131,13 +138,12 @@ def get_f1(logits : torch.Tensor, labels : torch.Tensor, per_class = False) -> t
     else:
         return precision_recall_fscore_support(labels, indices, average=None)[2].tolist()
 
-def get_binary_accuracy_and_f1(scores, labels, per_class = False):
+def get_binary_accuracy_and_f1(classes, labels, per_class = False):
 
-    out = torch.nn.Sigmoid()
-    scores = torch.where(out(scores) > 0.5, 1, 0)
-    correct = torch.sum(scores == labels)
+    print(classes.shape, labels.shape)
+    correct = torch.sum(classes.flatten() == labels)
     accuracy = correct.item() * 1.0 / len(labels)
-    classes = scores.detach().cpu().numpy()
+    classes = classes.detach().cpu().numpy()
     labels = labels.cpu().numpy()
 
     if not per_class:
@@ -204,16 +210,16 @@ def get_device(value : int) -> str:
     else: 
         return 'cuda:{}'.format(value)
 
-def get_features(text, visual, edges):
-    feat_n = 'bbox'
+def get_features(geom, text, visual, edges):
+    feat_n = ''
     feat_e = 'false'
 
-    if text and visual:
-        feat_n = 'all'
-    elif text:
-        feat_n = 'text'
-    elif visual:
-        feat_n = 'visual'
+    if geom:
+        feat_n + 'geom-'
+    if text:
+        feat_n + 'text-'
+    if visual:
+        feat_n + 'visual'
     
     if edges:
         feat_e = 'true'
@@ -222,8 +228,13 @@ def get_features(text, visual, edges):
 
 def compute_loss(pos_score, neg_score, device):
     scores = torch.cat([pos_score, neg_score])
+    s = F.sigmoid(scores)
+    print("\n", scores.shape, torch.max(s).item(), s.min().item(), ((s < 0.5).sum()/s.shape[0]).item(), pos_score.shape, neg_score.shape, "\n")
+    input()
     labels = torch.cat([torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])])
-    return F.binary_cross_entropy_with_logits(scores.to(device), labels.to(device))
+    w = torch.ones_like(labels)
+    w[pos_score.shape[0]:] = 0.01
+    return F.binary_cross_entropy_with_logits(scores.flatten().to(device), labels.to(device), weight=w.to('cuda:0'))
 
 def compute_auc(pos_score, neg_score):
     scores = torch.cat([pos_score, neg_score]).detach().cpu().numpy()
@@ -231,7 +242,57 @@ def compute_auc(pos_score, neg_score):
         [torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])]).cpu().numpy()
     return roc_auc_score(labels, scores)
 
+def compute_loss_2(scores : torch.Tensor, labels : torch.Tensor):
+    
+    s = torch.sigmoid(scores)
+    # print("\n", scores.shape, torch.max(s).item(), s.min().item(), ((s < 0.5).sum()/s.shape[0]).item(), "\n")
+    # w = torch.ones_like(labels)
+    # w[pos_score.shape[0]:] = 0.01
+    # print(scores.dtype, labels.dtype)
+    w = class_weight.compute_sample_weight(class_weight='balanced', y=labels.cpu().numpy())
+    # w = [1e6 if (l == 1) else 0.1 for l in labels]
+    # print(np.unique(w))
+    return F.binary_cross_entropy_with_logits(scores, labels, weight=torch.tensor(w).to('cuda:0'))
+    # return F.binary_cross_entropy_with_logits(scores, labels)
+
+def compute_crossentropy_loss(scores : torch.Tensor, labels : torch.Tensor):
+    w = class_weight.compute_class_weight(class_weight='balanced', classes= np.unique(labels.cpu().numpy()), y=labels.cpu().numpy())
+    return torch.nn.CrossEntropyLoss(weight=torch.tensor(w, dtype=torch.float32).to('cuda:0'))(scores, labels)
+
+def compute_auc_2(scores, labels):
+    scores = scores.detach().cpu().numpy()
+    labels = labels.cpu().numpy()
+    # return roc_auc_score(labels, scores)
+    return average_precision_score(labels, scores)
+
+def compute_auc_mc(scores, labels):
+    scores = scores.detach().cpu().numpy()
+    labels = F.one_hot(labels).cpu().numpy()
+    # return roc_auc_score(labels, scores)
+    return average_precision_score(labels, scores)
+
 def compute_auc_all(scores, labels):
     scores = scores.detach().cpu().numpy()
     labels = labels.cpu().numpy()
-    return roc_auc_score(labels, scores)
+    optimal_thres = find_optimal_cutoff(labels, scores)
+    return roc_auc_score(labels, scores), optimal_thres
+
+def find_optimal_cutoff(target, predicted):
+    """ Find the optimal probability cutoff point for a classification model related to event rate
+    Parameters
+    ----------
+    target : Matrix with dependent or target data, where rows are observations
+
+    predicted : Matrix with predicted data, where rows are observations
+
+    Returns
+    -------     
+    list type, with optimal cutoff value
+        
+    """
+    fpr, tpr, threshold = roc_curve(target, predicted)
+    i = np.arange(len(tpr)) 
+    roc = pd.DataFrame({'tf' : pd.Series(tpr-(1-fpr), index=i), 'threshold' : pd.Series(threshold, index=i)})
+    roc_t = roc.iloc[(roc.tf-0).abs().argsort()[:1]]
+
+    return list(roc_t['threshold']) 

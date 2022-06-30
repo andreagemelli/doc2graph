@@ -1,0 +1,3 @@
+name: GAT
+num_layers: 3
+out_chunks: 300

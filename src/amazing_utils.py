@@ -33,6 +33,7 @@ def project_tree():
     create_folder(WEIGHTS)
     create_folder(RUNS)
     create_folder(RESULTS)
+    create_folder(TRAIN_SAMPLES)
     return
 
 def set_preprocessing(args):
