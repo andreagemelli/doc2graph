@@ -34,6 +34,7 @@ def project_tree():
     create_folder(RUNS)
     create_folder(RESULTS)
     create_folder(TRAIN_SAMPLES)
+    create_folder(TEST_SAMPLES)
     return
 
 def set_preprocessing(args):
@@ -41,6 +42,7 @@ def set_preprocessing(args):
         cfg_preprocessing = dict(yaml.safe_load(fileobj))
     cfg_preprocessing['FEATURES']['add_geom'] = args.add_geom
     cfg_preprocessing['FEATURES']['add_embs'] = args.add_embs
+    cfg_preprocessing['FEATURES']['add_hist'] = args.add_hist
     cfg_preprocessing['FEATURES']['add_visual'] = args.add_visual
     cfg_preprocessing['FEATURES']['add_eweights'] = args.add_eweights
     cfg_preprocessing['FEATURES']['add_fudge'] = args.add_fudge

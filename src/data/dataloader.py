@@ -8,13 +8,12 @@ from PIL import Image, ImageDraw
 from src.data.feature_builder import FeatureBuilder
 from src.data.graph_builder import GraphBuilder
 from src.amazing_utils import get_config
-from src.paths import TRAIN_SAMPLES
 
 class Document2Graph(data.Dataset):
     """This class convert documents (both images or pdfs) into graph structures.
     """
 
-    def __init__(self, name : str, src_path : str, device = str) -> None:
+    def __init__(self, name : str, src_path : str, device = str, output_dir = str) -> None:
         """
         Args:
             src_type (str): should be one of the following: ['gt', 'img', 'pdf']
@@ -30,6 +29,7 @@ class Document2Graph(data.Dataset):
         self.src_data = self.cfg_preprocessing.LOADER.src_data
         self.GB = GraphBuilder()
         self.FB = FeatureBuilder(device)
+        self.output_dir = output_dir
 
         # get graphs
         self.graphs, self.node_labels, self.edge_labels, self.paths = self.__docs2graphs()
@@ -123,5 +123,6 @@ class Document2Graph(data.Dataset):
             graph_draw.ellipse([(sc[0]-4,sc[1]-4), (sc[0]+4,sc[1]+4)], fill = 'green', outline='black')
             graph_draw.ellipse([(ec[0]-4,ec[1]-4), (ec[0]+4,ec[1]+4)], fill = 'red', outline='black')
 
-        graph_img.save(TRAIN_SAMPLES / f'{name}.png')
+        graph_img.save(self.output_dir / f'{name}.png')
+        return graph_img
         

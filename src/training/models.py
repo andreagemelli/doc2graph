@@ -91,8 +91,7 @@ class GcnSAGELayer(nn.Module):
         
         if not self.use_pp:
             # norm = self.get_norm(g)
-            norm = 1
-            #TODO concatenate edge reciprocal position information
+            norm = g.ndata['norm']
             g.ndata['h'] = h
             g.update_all(fn.u_mul_e('h', 'weights', 'm'),
                         fn.sum(msg='m', out='h'))
@@ -180,7 +179,8 @@ class EdgeClassifier(nn.Module):
         self.message_passing = nn.ModuleList()
         self.m_layers = m_layers
         for l in range(m_layers):
-            self.message_passing.append(SAGEConv(m_hidden, m_hidden, 'mean', norm=nn.LayerNorm(m_hidden), activation=F.relu))
+            # self.message_passing.append(SAGEConv(m_hidden, m_hidden, 'mean', norm=nn.LayerNorm(m_hidden), activation=F.relu))
+            self.message_passing.append(GcnSAGELayer(m_hidden, m_hidden, F.relu, 0.))
 
         # Define edge predictori layer
         self.edge_pred = MLPPredictor(m_hidden, hidden_dim, edge_classes, dropout)  
@@ -190,7 +190,7 @@ class EdgeClassifier(nn.Module):
         h = self.projector(h)
 
         for l in range(self.m_layers):
-            h = self.message_passing[l](g, h, g.edata['weights'])
+            h = self.message_passing[l](g, h)
         
         e = self.edge_pred(g, h)
 

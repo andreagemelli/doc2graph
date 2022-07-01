@@ -16,6 +16,8 @@ def main():
                         help="add geometrical features to nodes")
     parser.add_argument('--add-embs', '-addT', action="store_true",
                         help="add textual embeddings to nodes")
+    parser.add_argument('--add-hist', '-addH', action="store_true",
+                        help="add histogram of contents to nodes")
     parser.add_argument('--add-visual', '-addV', action="store_true",
                         help="add visual features to nodes")
     parser.add_argument('--add-eweights', '-addE', action="store_true",

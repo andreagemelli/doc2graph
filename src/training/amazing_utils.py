@@ -33,7 +33,7 @@ class EarlyStopping:
         self.patience = patience
         self.counter = 0
         self.best_score = None
-        self.early_stop = False
+        self.early_stop = 'improved'
         self.model = model
         self.metric = metric
         e = datetime.now()
@@ -44,30 +44,35 @@ class EarlyStopping:
         if self.best_score is None:
             self.best_score = score
             self.save_checkpoint()
+            return 'improved'
 
         if self.metric == 'loss':
             if score > self.best_score:
                 self.counter += 1
                 print(f'    !- Stop Counter {self.counter} / {self.patience}')
+                self.early_stop = 'not-improved'
                 if self.counter >= self.patience:
-                    self.early_stop = True
+                    self.early_stop = 'stop'
             else:
                 print(f'    !- Validation LOSS decreased from {self.best_score} -> {score}')
                 self.best_score = score
                 self.save_checkpoint()
                 self.counter = 0
+                self.early_stop = 'improved'
 
         elif self.metric == 'acc':
             if score <= self.best_score:
                 self.counter += 1
                 print(f'    !- Stop Counter {self.counter} / {self.patience}')
+                self.early_stop = 'not-improved'
                 if self.counter >= self.patience:
-                    self.early_stop = True
+                    self.early_stop = 'stop'
             else:
                 print(f'    !- Validation ACCURACY increased from {self.best_score} -> {score}')
                 self.best_score = score
                 self.save_checkpoint()
                 self.counter = 0
+                self.early_stop = 'improved'
                 
         else:
             raise Exception('EarlyStopping Error: metric provided not valid. Select between loss or acc')

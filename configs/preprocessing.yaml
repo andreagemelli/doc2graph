@@ -1,9 +1,10 @@
 FEATURES:
-  add_embs: true
+  add_embs: false
   add_eweights: true
   add_fudge: false
   add_geom: true
-  add_visual: true
+  add_hist: false
+  add_visual: false
 GRAPHS:
   data_type: img
   edge_type: fully

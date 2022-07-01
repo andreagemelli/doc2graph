@@ -31,6 +31,7 @@ class FeatureBuilder():
         self.cfg_preprocessing = get_config('preprocessing')
         self.add_geom = self.cfg_preprocessing.FEATURES.add_geom
         self.add_embs = self.cfg_preprocessing.FEATURES.add_embs
+        self.add_hist = self.cfg_preprocessing.FEATURES.add_hist
         self.add_visual = self.cfg_preprocessing.FEATURES.add_visual
         self.add_eweights = self.cfg_preprocessing.FEATURES.add_eweights
         self.device = d
@@ -65,11 +66,13 @@ class FeatureBuilder():
                 [feats[idx].extend(scale(box, size)) for idx, box in enumerate(features['boxs'][id])]
                 chunks.append(4)
             
+            if self.add_hist:
+                # HISTOGRAM OF TEXT
+                [feats[idx].extend(hist) for idx, hist in enumerate(get_histogram(features['texts'][id]))]
+                chunks.append(4)
+            
             # textual features
             if self.add_embs:
-                # HISTOGRAM OF TEXT
-                # [feats[idx].extend(hist) for idx, hist in enumerate(get_histogram(features['texts'][id]))]
-                # chunks.append(4)
                 # LANGUAGE MODEL (SPACY)
                 [feats[idx].extend(self.text_embedder(features['texts'][id][idx]).vector) for idx, _ in enumerate(feats)]
                 chunks.append(len(self.text_embedder(features['texts'][id][0]).vector))
@@ -150,7 +153,16 @@ class FeatureBuilder():
             g.ndata['feat'] = torch.tensor(feats, dtype=torch.float32)
 
             distances = torch.tensor([(1-d/m) for d in distances], dtype=torch.float32)
-            g.edata['weights'] = torch.where(distances > 0.9, torch.full_like(distances, 0.1), torch.zeros_like(distances))
+            tresh_dist = torch.where(distances > 0.9, torch.full_like(distances, 0.1), torch.zeros_like(distances))
+            g.edata['weights'] = tresh_dist
+
+            norm = []
+            num_nodes = len(features['boxs'][id])
+            for n in range(num_nodes):
+                neigs = torch.count_nonzero(tresh_dist[n*num_nodes:(n+1)*num_nodes]).tolist()
+                try: norm.append([1. / neigs])
+                except: norm.append([1.])
+            g.ndata['norm'] = torch.tensor(norm, dtype=torch.float32)
 
             #! DEBUG PURPOSES TO VISUALIZE RANDOM GRAPH IMAGE FROM DATASET
             if False:

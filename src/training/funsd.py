@@ -1,20 +1,19 @@
-from asyncore import write
 from datetime import datetime
-from sklearn.metrics import f1_score
 from sklearn.model_selection import ShuffleSplit
 import torch
 from torch.nn import functional as F
 from random import shuffle, choice, seed
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-import dgl
-from PIL import Image, ImageDraw
+from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau
+import dgl 
 from torch.utils.tensorboard import SummaryWriter
+import torchvision
+from torchvision import transforms
 
 from src.data.dataloader import Document2Graph
-from src.paths import ROOT, FUNSD_TRAIN, FUNSD_TEST, RUNS, WEIGHTS
+from src.paths import *
 from src.training.models import SetModel
 from src.amazing_utils import get_config
-from src.training.amazing_utils import EarlyStopping, accuracy, compute_auc, compute_auc_2, compute_auc_all, compute_auc_mc, compute_crossentropy_loss, compute_loss_2, evaluate, get_binary_accuracy_and_f1, get_device, get_f1, get_features, save_test_results, validate
+from src.training.amazing_utils import *
 
 def entity_labeling(args):
 
@@ -25,7 +24,7 @@ def entity_labeling(args):
 
     if not args.test:
         ################* STEP 0: LOAD DATA ################
-        data = Document2Graph(name='FUNSD TRAIN', src_path=FUNSD_TRAIN, device = device)
+        data = Document2Graph(name='FUNSD TRAIN', src_path=FUNSD_TRAIN, device = device, output_dir=TRAIN_SAMPLES)
         data.get_info()
         num_feats = 200 # data.num_features 100
         node_num_classes = data.node_num_classes
@@ -100,7 +99,7 @@ def entity_labeling(args):
     print("\n### TESTING ###")
 
     #? test
-    test_data = Document2Graph(name='FUNSD TEST', src_path=FUNSD_TEST, device = device)
+    test_data = Document2Graph(name='FUNSD TEST', src_path=FUNSD_TEST, device = device, output_dir=TEST_SAMPLES)
     test_data.get_info()
     mean_test_acc, f1 = evaluate(model, test_data.graphs, device)
 
@@ -251,14 +250,14 @@ def link_prediction(args):
 
     if not args.test:
         ################* STEP 0: LOAD DATA ################
-        data = Document2Graph(name='FUNSD TRAIN', src_path=FUNSD_TRAIN, device = device)
+        data = Document2Graph(name='FUNSD TRAIN', src_path=FUNSD_TRAIN, device = device, output_dir=TRAIN_SAMPLES)
         data.get_info()
-        data.print_graph()
+        data.print_graph(name='example')
 
         ss = ShuffleSplit(n_splits=1, test_size=cfg_train.val_size, random_state=0)
         train_index, val_index = next(ss.split(data.graphs))
-        rand_tid = choice(train_index)
-        rand_vid = choice(val_index)
+        rand_tid = [choice(train_index) for i in range(5)]
+        rand_vid = [choice(val_index) for i in range(5)]
 
         # TRAIN
         train_graphs = [data.graphs[i] for i in train_index]
@@ -272,17 +271,20 @@ def link_prediction(args):
         ################* STEP 1: CREATE MODEL ################
         model = sm.get_model(None, 2, data.get_chunks())
         optimizer = torch.optim.Adam(model.parameters(), lr=float(cfg_train.lr), weight_decay=float(cfg_train.weight_decay))
-        scheduler = ReduceLROnPlateau(optimizer, 'min', patience=1000, verbose=True, factor=0.1)
+        # scheduler = ReduceLROnPlateau(optimizer, 'min', patience=100, verbose=True, factor=0.5)
+        scheduler = StepLR(optimizer, step_size=60, gamma=0.5, last_epoch=-1, verbose=True)
         e = datetime.now()
         train_name = args.model + f'-{e.strftime("%Y%m%d-%H%M")}'
-        stopper = EarlyStopping(model, name=train_name, metric=cfg_train.stopper_metric, patience=10000)
+        stopper = EarlyStopping(model, name=train_name, metric=cfg_train.stopper_metric, patience=1000)
         writer = SummaryWriter(log_dir=RUNS)
+        convert_imgs = transforms.ToTensor()
     
         ################* STEP 2: TRAINING ################
         print("\n### TRAINING ###")
         print(f"-> Training samples: {tg.batch_size}")
         print(f"-> Validation samples: {vg.batch_size}\n")
 
+        im_step = 0
         for epoch in range(cfg_train.epochs):
 
             #* TRAINING
@@ -296,7 +298,7 @@ def link_prediction(args):
             optimizer.zero_grad()
             loss.backward()
             n = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
-            print("Gradient:", n.max())
+            # print("Gradient:", n.max())
             optimizer.step()
 
             #* VALIDATION
@@ -308,46 +310,59 @@ def link_prediction(args):
                 val_loss = compute_crossentropy_loss(val_scores.to(device), vg.edata['label'].to(device))
                 val_auc = compute_auc_mc(val_scores.to(device), vg.edata['label'].to(device))
             
-            #* PRINTING IMAGEs
-            
-            start, end = 0, 0
-            for tid in train_index:
-                start = end
-                end += data.graphs[tid].num_edges()
-                if tid == rand_tid: break
-
-            # targets = torch.where(scores > 0, 1, 0)[start:end]
-            blu = F.softmax(scores[start:end], dim=1)
-            _, targets = torch.max(blu, dim=1)
-            kvp_ids = targets.nonzero().flatten().tolist()
-            data.print_graph(num=rand_tid, labels_ids=kvp_ids, name='train')
-            data.print_graph(num=rand_tid, name='train_labels')
-
-            v_start, v_end = 0, 0
-            for vid in val_index:
-                v_start = v_end
-                v_end += data.graphs[vid].num_edges()
-                if vid == rand_vid: break
-
-            #val_targets = torch.where(scores > 0, 1, 0)[v_start:v_end]
-            _, val_targets = torch.max(F.softmax(val_scores[v_start:v_end], dim=1), dim=1)
-            val_kvp_ids = val_targets.nonzero().flatten().tolist()
-            
-            data.print_graph(num=rand_vid, labels_ids=val_kvp_ids, name='val')
-            data.print_graph(num=rand_vid, name='val_labels')
-            
             scheduler.step(val_loss.item())
+
+            #* PRINTING IMAGEs AND RESULTS
 
             print("Epoch {:05d} | TrainLoss {:.4f} | TrainAUC-PR {:.4f} | ValLoss {:.4f} | ValAUC-PR {:.4f} |"
             .format(epoch, loss.item(), auc, val_loss.item(), val_auc))
             
-            #* UPDATE
-            if cfg_train.stopper_metric == 'loss' and stopper.step(val_loss.item()): break
-            if cfg_train.stopper_metric == 'acc' and stopper.step(val_auc): break
+            if cfg_train.stopper_metric == 'loss':
+                step_value = val_loss.item()
+            elif cfg_train.stopper_metric == 'acc':
+                step_value = val_auc
+            
+            ss = stopper.step(step_value)
+
+            if  ss == 'improved':
+                im_step = epoch
+                train_imgs = []
+                for r in rand_tid:
+                    start, end = 0, 0
+                    for tid in train_index:
+                        start = end
+                        end += data.graphs[tid].num_edges()
+                        if tid == r: break
+
+                    _, targets = torch.max(F.log_softmax(scores[start:end], dim=1), dim=1)
+                    kvp_ids = targets.nonzero().flatten().tolist()
+                    train_imgs.append(convert_imgs(data.print_graph(num=r, labels_ids=kvp_ids, name=f'train_{r}'))[:, :, :700])
+                    data.print_graph(num=r, name=f'train_labels_{r}')
+
+                val_imgs = []
+                for r in rand_vid:
+                    v_start, v_end = 0, 0
+                    for vid in val_index:
+                        v_start = v_end
+                        v_end += data.graphs[vid].num_edges()
+                        if vid == r: break
+
+                    _, val_targets = torch.max(F.log_softmax(val_scores[v_start:v_end], dim=1), dim=1)
+                    val_kvp_ids = val_targets.nonzero().flatten().tolist()
+                    val_imgs.append(convert_imgs(data.print_graph(num=r, labels_ids=val_kvp_ids, name=f'val_{r}'))[:, :, :700])
+                    data.print_graph(num=r, name=f'val_labels_{r}')
+
+            if ss == 'stop':
+                break
 
             writer.add_scalars('AUC-PR', {'train': auc, 'val': val_auc}, epoch)
-            writer.add_scalar('Loss/train', loss.item(), epoch)
-            writer.add_scalar('Loss/val', val_loss.item(), epoch)
+            writer.add_scalars('LOSS', {'train': loss.item(), 'val': val_loss.item()}, epoch)
+            writer.add_scalar('LR', scheduler.optimizer.param_groups[0]['lr'], epoch)
+
+            train_grid = torchvision.utils.make_grid(train_imgs)
+            writer.add_image('train_images', train_grid, im_step)
+            val_grid = torchvision.utils.make_grid(val_imgs)
+            writer.add_image('val_images', val_grid, im_step)
         
         print("LOADING: ", train_name+'.pt')
         model.load_state_dict(torch.load(WEIGHTS / (train_name+'.pt')))
@@ -364,62 +379,33 @@ def link_prediction(args):
     print("\n### TESTING ###")
 
     #? test
-    test_data = Document2Graph(name='FUNSD TEST', src_path=FUNSD_TEST, device = device)
-    # test_data.balance()
+    test_data = Document2Graph(name='FUNSD TEST', src_path=FUNSD_TEST, device = device, output_dir=TEST_SAMPLES)
     test_data.get_info()
     
     test_graph = dgl.batch(test_data.graphs).to(device)
-    pos_eids = (test_graph.edata['label'] == 1).nonzero().flatten().tolist()
-    test_g_pos = dgl.edge_subgraph(test_graph, pos_eids).to(device)
-    neg_eids = (test_graph.edata['label'] == 0).nonzero().flatten().tolist()
-    test_g_neg = dgl.edge_subgraph(test_graph, neg_eids).to(device)
 
     model.eval()
     with torch.no_grad():
-        pos_score = model(test_g_pos, test_g_pos.ndata['feat'].to(device))
-        neg_score = model(test_g_neg, test_g_neg.ndata['feat'].to(device))
-        auc = compute_auc(pos_score, neg_score)
 
-        all_scores = model(test_graph, test_graph.ndata['feat'].to(device))
-        out = torch.nn.Sigmoid()
-        all_scores = out(all_scores)
-        all_auc, ot = compute_auc_all(all_scores, test_graph.edata['label'])
-
-        print(ot[0])
-        preds = torch.where(all_scores > ot[0], 1, 0)
+        scores = model(test_graph, test_graph.ndata['feat'].to(device))
+        auc = compute_auc_mc(scores.to(device), test_graph.edata['label'].to(device))
+        
+        _, preds = torch.max(F.log_softmax(scores, dim=1), dim=1)
         test_graph.edata['preds'] = preds
+
+        for g, graph in enumerate(dgl.unbatch(test_graph)):
+            targets = graph.edata['preds']
+            kvp_ids = targets.nonzero().flatten().tolist()
+            test_data.print_graph(num=g, labels_ids=kvp_ids, name=f'test_{g}')
+            test_data.print_graph(num=g, name=f'test_labels_{g}')
 
         accuracy, f1 = get_binary_accuracy_and_f1(preds, test_graph.edata['label'])
         _, classes_f1 = get_binary_accuracy_and_f1(preds, test_graph.edata['label'], per_class=True)
     
-    graphs = dgl.unbatch(test_graph)
-    target_graph = graphs[0]
-    targets = target_graph.edata['preds']
-    kvp = (targets == 1)
-    kvp_ids = kvp.nonzero().flatten().tolist()
-    
-    # ! PRINTING IMAGE
-    print(test_data.paths[0])
-    img = Image.open(test_data.paths[0]).convert('RGB')
-    draw = ImageDraw.Draw(img)
-    w, h = img.size
-    boxs = target_graph.ndata['geom'][:, :4].tolist()
-    boxs = [[box[0]*w, box[1]*h, box[2]*w, box[3]*h] for box in boxs]
-    for box in boxs:
-        draw.rectangle(box, outline='blue', width=2)
-    
-    center = lambda rect: ((rect[2]+rect[0])/2, (rect[3]+rect[1])/2)
-    u, v = target_graph.edges()
-    for edge in kvp_ids:
-        sb = boxs[u[edge]]
-        eb = boxs[v[edge]]
-        draw.line((center(sb), center(eb)), fill='violet', width=3)
-    img.save('test.png')
 
     ################* STEP 4: RESULTS ################
     print("\n### RESULTS ###")
     print("AUC {:.4f}".format(auc))
-    print("All AUC {:.4f}".format(all_auc))
     print("Accuracy {:.4f}".format(accuracy))
     print("F1 Score: Macro {:.4f} - Micro {:.4f}".format(f1[0], f1[1]))
     print("F1 Classes: None {:.4f} - Pairs {:.4f}".format(classes_f1[0], classes_f1[1]))
@@ -427,8 +413,30 @@ def link_prediction(args):
     if not args.test:
         feat_n, feat_e = get_features(args.add_geom, args.add_embs, args.add_visual, args.add_eweights)
         #? if skipping training, no need to save anything
-        results = {'model': sm.get_name(), 'net-params': sm.get_total_params(), 'features': feat_n, 'fedges': feat_e, 'best_score': stopper.best_score, 'f1-scores': (f1[0], f1[1]),
-                'classes': classes_f1}
+        model = get_config(MODELS / args.model)
+        results = {'MODEL': {
+            'name': sm.get_name(), 
+            'net-params': sm.get_total_params(), 
+            'num-layers': model.num_layers,
+            'projector-output': model.out_chunks,
+            'dropout': model.dropout,
+            'lastFC': model.hidden_dim
+            },
+            'FEATURES': {
+                'nodes': feat_n, 
+                'edges': feat_e
+            },
+            'PARAMS': {
+                'start-lr': cfg_train.lr,
+                'weight-decay': cfg_train.weight_decay,
+                'seed': cfg_train.seed
+            },
+            'RESULTS': {
+                'val-loss': stopper.best_score, 
+                'f1-scores': f1,
+                'AUC-PR': auc,
+                'ACCURACY': accuracy
+            }}
         save_test_results(train_name, results)
     return
 
