@@ -11,7 +11,7 @@ import torchvision.transforms.functional as tvF
 from src.data.amazing_utils import transform_image
 from src.data.amazing_utils import distance, get_histogram
 from src.amazing_utils import get_config
-from src.paths import FUDGE, MODELS, ROOT
+from src.paths import CHECKPOINTS, FUDGE, MODELS, ROOT
 
 import sys, os
 sys.path.append(os.path.join(ROOT,'FUDGE'))
@@ -41,7 +41,7 @@ class FeatureBuilder():
 
         if self.add_visual:
             self.visual_embedder = smp.Unet(encoder_name="resnet18", encoder_weights=None, in_channels=1, classes=4)
-            self.visual_embedder.load_state_dict(torch.load(MODELS / 'unet.pth')['weights'])
+            self.visual_embedder.load_state_dict(torch.load(CHECKPOINTS / 'unet.pth')['weights'])
             self.visual_embedder = self.visual_embedder.to(d)
 
         if self.add_fudge:

@@ -19,7 +19,7 @@ IMGS = OUTPUTS / 'images'
 TRAIN_SAMPLES = OUTPUTS / 'train_samples'
 TEST_SAMPLES = OUTPUTS / 'test_samples'
 TRAINING = ROOT / 'src' / 'training'
-MODELS = TRAINING / 'models'
+CHECKPOINTS = TRAINING / 'checkpoints'
 
 # FUNSD
 FUNSD_TRAIN = DATA / 'FUNSD' / 'training_data'
