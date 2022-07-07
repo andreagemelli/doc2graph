@@ -1,5 +1,5 @@
 FEATURES:
-  add_embs: false
+  add_embs: true
   add_eweights: true
   add_fudge: false
   add_geom: true

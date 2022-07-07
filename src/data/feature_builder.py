@@ -1,24 +1,21 @@
-from math import sqrt
 import random
-
-import numpy as np
-from scipy.fft import dst
-from src.data.amazing_utils import distance, get_histogram
-from src.amazing_utils import get_config
+import fasttext.util
 import spacy
 import torch
 import torchvision
-from torchvision import transforms
-from src.paths import FUDGE, ROOT, TRAINING
-import sys
-import os
-from src.data.amazing_utils import transform_image
-sys.path.append(os.path.join(ROOT,'FUDGE'))
-from FUDGE.run import detect_boxes
 from tqdm import tqdm
 from PIL import Image, ImageDraw
 import segmentation_models_pytorch as smp
 import torchvision.transforms.functional as tvF
+
+from src.data.amazing_utils import transform_image
+from src.data.amazing_utils import distance, get_histogram
+from src.amazing_utils import get_config
+from src.paths import FUDGE, MODELS, ROOT
+
+import sys, os
+sys.path.append(os.path.join(ROOT,'FUDGE'))
+from FUDGE.run import detect_boxes
 
 class FeatureBuilder():
 
@@ -29,20 +26,22 @@ class FeatureBuilder():
             d (_type_): _description_
         """
         self.cfg_preprocessing = get_config('preprocessing')
+        self.device = d
         self.add_geom = self.cfg_preprocessing.FEATURES.add_geom
         self.add_embs = self.cfg_preprocessing.FEATURES.add_embs
         self.add_hist = self.cfg_preprocessing.FEATURES.add_hist
         self.add_visual = self.cfg_preprocessing.FEATURES.add_visual
         self.add_eweights = self.cfg_preprocessing.FEATURES.add_eweights
-        self.device = d
         self.add_fudge = self.cfg_preprocessing.FEATURES.add_fudge
 
         if self.add_embs:
             self.text_embedder = spacy.load('en_core_web_lg')
+            # fasttext.util.download_model('en', if_exists='ignore')
+            # self.text_embedder = fasttext.load_model('cc.en.300.bin')
 
         if self.add_visual:
             self.visual_embedder = smp.Unet(encoder_name="resnet18", encoder_weights=None, in_channels=1, classes=4)
-            self.visual_embedder.load_state_dict(torch.load(TRAINING / 'unet.pth')['weights'])
+            self.visual_embedder.load_state_dict(torch.load(MODELS / 'unet.pth')['weights'])
             self.visual_embedder = self.visual_embedder.to(d)
 
         if self.add_fudge:
@@ -76,6 +75,9 @@ class FeatureBuilder():
                 # LANGUAGE MODEL (SPACY)
                 [feats[idx].extend(self.text_embedder(features['texts'][id][idx]).vector) for idx, _ in enumerate(feats)]
                 chunks.append(len(self.text_embedder(features['texts'][id][0]).vector))
+                # LANGUAGE MODEL (FASTTEXT)
+                # [feats[idx].extend(self.text_embedder.get_sentence_vector(features['texts'][id][idx])) for idx, _ in enumerate(feats)]
+                # chunks.append(len(self.text_embedder.get_sentence_vector(features['texts'][id][0])))
             
             # visual features
             if self.add_visual:
@@ -85,7 +87,7 @@ class FeatureBuilder():
                 visual_emb = self.visual_embedder.encoder(tvF.to_tensor(img).unsqueeze_(0).to(self.device)) # output [batch, canali, dim1, dim2]
                 bboxs = [torch.Tensor(b) for b in features['boxs'][id]]
                 bboxs = [torch.stack(bboxs, dim=0).to(self.device)]
-                h = [torchvision.ops.roi_align(input=ve, boxes=bboxs, spatial_scale=1/ min(size[1] / ve.shape[2] , size[0] / ve.shape[3]), output_size=1) for ve in visual_emb[1:]]
+                h = [torchvision.ops.roi_align(input=ve, boxes=bboxs, spatial_scale=1/ min(size[1] / ve.shape[2] , size[0] / ve.shape[3]), output_size=1) for ve in visual_emb[3:]]
                 h = torch.cat(h, dim=1)
                 #for ve in visual_embs:
                 #    scale = min(size[1] / visual_emb.shape[2] , size[0] / visual_emb.shape[3])
@@ -142,6 +144,7 @@ class FeatureBuilder():
                     angles.append(angle/360)
                 
                 m = max(distances)
+                # m = math.sqrt(size[0]**2 + size[1]**2)
                 polar_coordinates = torch.tensor([[a, (1-d/m)] for a, d in zip(angles, distances)], dtype=torch.float32)
                 g.edata['feat'] = polar_coordinates
 
@@ -154,11 +157,16 @@ class FeatureBuilder():
 
             distances = torch.tensor([(1-d/m) for d in distances], dtype=torch.float32)
             tresh_dist = torch.where(distances > 0.9, torch.full_like(distances, 0.1), torch.zeros_like(distances))
+            # tresh_dist = torch.zeros_like(distances)
+            num_nodes = len(features['boxs'][id]) - 1
+            # k = min(num_nodes + 1, 10)
+            # for n in range(num_nodes + 1):
+            #     closest_k = torch.topk(distances[n*num_nodes:(n+1)*num_nodes], k).indices + torch.tensor(num_nodes * n)
+            #     tresh_dist[closest_k] = .1
             g.edata['weights'] = tresh_dist
 
             norm = []
-            num_nodes = len(features['boxs'][id])
-            for n in range(num_nodes):
+            for n in range(num_nodes + 1):
                 neigs = torch.count_nonzero(tresh_dist[n*num_nodes:(n+1)*num_nodes]).tolist()
                 try: norm.append([1. / neigs])
                 except: norm.append([1.])

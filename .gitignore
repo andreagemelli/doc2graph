@@ -5,6 +5,7 @@ __pycache__/
 *.eggs
 build
 .vscode
+cc.*
 
 #user-defined
 DATA
@@ -15,3 +16,4 @@ FUDGE
 configs/preprocessing.yaml
 esempi
 examples
+fastText

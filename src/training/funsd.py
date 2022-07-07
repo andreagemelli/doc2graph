@@ -8,6 +8,7 @@ import dgl
 from torch.utils.tensorboard import SummaryWriter
 import torchvision
 from torchvision import transforms
+import time
 
 from src.data.dataloader import Document2Graph
 from src.paths import *
@@ -243,6 +244,7 @@ def entity_linking(args):
 def link_prediction(args):
 
     # configs
+    start_training = time.time()
     cfg_train = get_config('train')
     seed(cfg_train.seed)
     device = get_device(args.gpu)
@@ -254,7 +256,7 @@ def link_prediction(args):
         data.get_info()
         data.print_graph(name='example')
 
-        ss = ShuffleSplit(n_splits=1, test_size=cfg_train.val_size, random_state=0)
+        ss = ShuffleSplit(n_splits=1, test_size=cfg_train.val_size, random_state=cfg_train.seed)
         train_index, val_index = next(ss.split(data.graphs))
         rand_tid = [choice(train_index) for i in range(5)]
         rand_vid = [choice(val_index) for i in range(5)]
@@ -271,8 +273,8 @@ def link_prediction(args):
         ################* STEP 1: CREATE MODEL ################
         model = sm.get_model(None, 2, data.get_chunks())
         optimizer = torch.optim.Adam(model.parameters(), lr=float(cfg_train.lr), weight_decay=float(cfg_train.weight_decay))
-        # scheduler = ReduceLROnPlateau(optimizer, 'min', patience=100, verbose=True, factor=0.5)
-        scheduler = StepLR(optimizer, step_size=60, gamma=0.5, last_epoch=-1, verbose=True)
+        # scheduler = ReduceLROnPlateau(optimizer, 'max', patience=30, min_lr=1e-4, verbose=True, factor=0.5)
+        # scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
         e = datetime.now()
         train_name = args.model + f'-{e.strftime("%Y%m%d-%H%M")}'
         stopper = EarlyStopping(model, name=train_name, metric=cfg_train.stopper_metric, patience=1000)
@@ -310,7 +312,8 @@ def link_prediction(args):
                 val_loss = compute_crossentropy_loss(val_scores.to(device), vg.edata['label'].to(device))
                 val_auc = compute_auc_mc(val_scores.to(device), vg.edata['label'].to(device))
             
-            scheduler.step(val_loss.item())
+            # scheduler.step(val_auc)
+            # scheduler.step()
 
             #* PRINTING IMAGEs AND RESULTS
 
@@ -357,7 +360,7 @@ def link_prediction(args):
 
             writer.add_scalars('AUC-PR', {'train': auc, 'val': val_auc}, epoch)
             writer.add_scalars('LOSS', {'train': loss.item(), 'val': val_loss.item()}, epoch)
-            writer.add_scalar('LR', scheduler.optimizer.param_groups[0]['lr'], epoch)
+            writer.add_scalar('LR', optimizer.param_groups[0]['lr'], epoch)
 
             train_grid = torchvision.utils.make_grid(train_imgs)
             writer.add_image('train_images', train_grid, im_step)
@@ -372,7 +375,7 @@ def link_prediction(args):
         print("\n### SKIP TRAINING ###")
         print(f"-> loading {args.weights}")
         data = Document2Graph(name='FUNSD TRAIN', src_path=FUNSD_TRAIN, device = device)
-        model = sm.get_model(None, 1, data.get_chunks())
+        model = sm.get_model(None, 2, data.get_chunks())
         model.load_state_dict(torch.load(WEIGHTS / args.weights))
     
     ################* STEP 3: TESTING ################
@@ -411,7 +414,7 @@ def link_prediction(args):
     print("F1 Classes: None {:.4f} - Pairs {:.4f}".format(classes_f1[0], classes_f1[1]))
 
     if not args.test:
-        feat_n, feat_e = get_features(args.add_geom, args.add_embs, args.add_visual, args.add_eweights)
+        feat_n, feat_e = get_features(args)
         #? if skipping training, no need to save anything
         model = get_config(MODELS / args.model)
         results = {'MODEL': {
@@ -434,10 +437,13 @@ def link_prediction(args):
             'RESULTS': {
                 'val-loss': stopper.best_score, 
                 'f1-scores': f1,
+		'f1-classes': classes_f1, 
                 'AUC-PR': auc,
                 'ACCURACY': accuracy
             }}
         save_test_results(train_name, results)
+    
+    print("END TRAINING:", time.time() - start_training)
     return
 
 

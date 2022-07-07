@@ -215,18 +215,19 @@ def get_device(value : int) -> str:
     else: 
         return 'cuda:{}'.format(value)
 
-def get_features(geom, text, visual, edges):
+def get_features(args):
     feat_n = ''
     feat_e = 'false'
 
-    if geom:
-        feat_n + 'geom-'
-    if text:
-        feat_n + 'text-'
-    if visual:
-        feat_n + 'visual'
-    
-    if edges:
+    if args.add_geom:
+        feat_n += 'geom-'
+    if args.add_embs:
+        feat_n += 'text-'
+    if args.add_visual:
+        feat_n += 'visual-'
+    if args.add_hist:
+        feat_n += 'histogram-'
+    if args.add_eweights:
         feat_e = 'true'
         
     return feat_n, feat_e
