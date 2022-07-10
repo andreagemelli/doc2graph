@@ -22,7 +22,7 @@ def main():
                         help="add visual features to nodes")
     parser.add_argument('--add-eweights', '-addE', action="store_true",
                         help="add edge features to graphs")
-    parser.add_argument('--add-fudge', action="store_true",
+    parser.add_argument('--add-fudge', '-addF', action="store_true",
                         help="add FUDGE visual features to graphs")
     # data
     parser.add_argument("--src-data", type=str, default='FUNSD',

@@ -1,12 +1,12 @@
 FEATURES:
-  add_embs: true
+  add_embs: false
   add_eweights: true
-  add_fudge: false
-  add_geom: true
+  add_fudge: true
+  add_geom: false
   add_hist: false
   add_visual: false
 GRAPHS:
   data_type: img
   edge_type: fully
 LOADER:
-  src_data: FUNSD
+  src_data: NAF

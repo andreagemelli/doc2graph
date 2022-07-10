@@ -145,7 +145,7 @@ class FeatureBuilder():
                 
                 m = max(distances)
                 # m = math.sqrt(size[0]**2 + size[1]**2)
-                polar_coordinates = torch.tensor([[a, (1-d/m)] for a, d in zip(angles, distances)], dtype=torch.float32)
+                polar_coordinates = torch.tensor([[a, 1- d/m] for a, d in zip(angles, distances)], dtype=torch.float32)
                 g.edata['feat'] = polar_coordinates
 
             else:
@@ -157,12 +157,12 @@ class FeatureBuilder():
 
             distances = torch.tensor([(1-d/m) for d in distances], dtype=torch.float32)
             tresh_dist = torch.where(distances > 0.9, torch.full_like(distances, 0.1), torch.zeros_like(distances))
-            # tresh_dist = torch.zeros_like(distances)
+            # tresh_dist = torch.zeros_like(distances)
             num_nodes = len(features['boxs'][id]) - 1
-            # k = min(num_nodes + 1, 10)
+            # k = min(num_nodes + 1, 20)
             # for n in range(num_nodes + 1):
             #     closest_k = torch.topk(distances[n*num_nodes:(n+1)*num_nodes], k).indices + torch.tensor(num_nodes * n)
-            #     tresh_dist[closest_k] = .1
+            #     tresh_dist[closest_k] = .5
             g.edata['weights'] = tresh_dist
 
             norm = []

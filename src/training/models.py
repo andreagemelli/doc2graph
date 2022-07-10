@@ -37,7 +37,7 @@ class SetModel():
         print(f"-> Using {self.name}")
 
         if self.name == 'GCN':
-            m = GcnSAGE(chunks, self.cfg_model.out_chunks, nodes, self.cfg_model.num_layers, F.relu, self.cfg_model.dropout, self.cfg_model.attn)
+            m = GcnSAGE(chunks, self.cfg_model.out_chunks, nodes, self.cfg_model.num_layers, F.relu, False, self.device)
         
         elif self.name == 'EDGE':
             m = EdgeClassifier(edges, self.cfg_model.num_layers, self.cfg_model.dropout, chunks, self.cfg_model.out_chunks, self.cfg_model.hidden_dim, self.device, self.cfg_model.doProject)
@@ -125,46 +125,34 @@ class GcnSAGE(nn.Module):
                  n_classes,
                  n_layers,
                  activation,
-                 dropout,
+                 dropout=0,
                  use_pp=False,
-                 add_attn=False):
+                 device='cuda:0'):
         super(GcnSAGE, self).__init__()
+
+        self.projector = InputProjector(in_chunks, out_chunks, device)
         self.layers = nn.ModuleList()
-        self.dropout = nn.Dropout(dropout)
+        # self.dropout = nn.Dropout(dropout)
         self.n_layers = n_layers
-        self.add_attn = add_attn
 
-        self.projector = InputProjector(in_chunks, out_chunks)
-        n_hidden = int(self.projector.get_out_lenght() / 2)
+        n_hidden = self.projector.get_out_lenght()
 
-        # input layer
-        self.layers.append(GcnSAGELayer(self.projector.get_out_lenght(), n_hidden, activation=activation,
-                                        dropout=dropout, use_pp=use_pp, use_lynorm=True))
-        # hidden layers
-        for i in range(1, n_layers - 1):
-            self.layers.append(
-                GcnSAGELayer(n_hidden, n_hidden, activation=activation, dropout=dropout,
-                            use_pp=False, use_lynorm=True))
-        # output layer
-        if not self.add_attn:
-            self.layers.append(GcnSAGELayer(n_hidden, n_classes, activation=None,
-                                        dropout=False, use_pp=False, use_lynorm=False))
-        else:
-            self.layers.append(GATv2Conv(n_hidden, n_classes, num_heads=1))
+        # mp layers
+        for i in range(0, n_layers - 1):
+            self.layers.append(GcnSAGELayer(n_hidden, n_hidden, activation=activation, 
+                        dropout=dropout, use_pp=False, use_lynorm=True))
+
+        self.layers.append(GcnSAGELayer(n_hidden, n_classes, activation=None,
+                                    dropout=False, use_pp=False, use_lynorm=False))
 
     def forward(self, g, h): #, padding=False):
         
         h = self.projector(h)
 
-        for l in range(self.n_layers - 1):
+        for l in range(self.n_layers):
             h = self.layers[l](g, h)
         
-        if self.add_attn:
-            h, a = self.layers[-1](g, h, True)
-            return h.mean(1), a
-        else:
-            h = self.layers[-1](g, h)
-            return h, None
+        return h
 
 class EdgeClassifier(nn.Module):
 
