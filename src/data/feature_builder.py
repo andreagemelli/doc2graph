@@ -102,7 +102,8 @@ class FeatureBuilder():
             if self.add_fudge:
                 # img = features['images'][id]
                 full_path = features['paths'][id]
-                model = FUDGE / 'saved/NAF_detect_augR_staggerLighter.pth'
+                # model = FUDGE / 'saved/NAF_detect_augR_staggerLighter.pth'
+                model = FUDGE / 'saved/FUNSDLines_detect_augR_staggerLighter.pth'
                 img_input = transform_image(full_path)
 
                 _, visual_emb = detect_boxes(

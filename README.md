@@ -60,7 +60,7 @@ Change directly `configs/train.yaml` for training settings or create your own mo
 
 If you want to use FUDGE pretrained model to detect entities and get their visual features:
 - refer to [their github](https://github.com/herobd/FUDGE) for installation and weights download
-- replace `run.py` and `model/yolo_box_detector.py` scripts with our custom version (TODO: link download)
+- replace `run.py` and `model/yolo_box_detector.py` scripts with our custom version from [this drive](https://drive.google.com/drive/folders/1K66A_z-x7cF9piHN_T8TWuJ8k9LOAm7Y?usp=sharing)
 
 ## Testing
 ### FUNSD
