@@ -8,14 +8,15 @@ import segmentation_models_pytorch as smp
 import torchvision.transforms.functional as tvF
 import numpy as np
 
+from src.models.unet import Unet
 from src.data.amazing_utils import to_bin, transform_image
 from src.data.amazing_utils import distance, get_histogram
 from src.amazing_utils import get_config
 from src.paths import CHECKPOINTS, FUDGE, ROOT
 
 import sys, os
-sys.path.append(os.path.join(ROOT,'FUDGE'))
-from FUDGE.run import detect_boxes
+# sys.path.append(os.path.join(ROOT,'FUDGE'))
+# from FUDGE.run import detect_boxes
 
 class FeatureBuilder():
 
@@ -40,7 +41,7 @@ class FeatureBuilder():
             # self.text_embedder = fasttext.load_model('cc.en.300.bin')
 
         if self.add_visual:
-            self.visual_embedder = smp.Unet(encoder_name="resnet18", encoder_weights=None, in_channels=1, classes=4)
+            self.visual_embedder = Unet(encoder_name="mobilenet_v2", encoder_weights=None, in_channels=1, classes=4)
             self.visual_embedder.load_state_dict(torch.load(CHECKPOINTS / 'unet.pth')['weights'])
             self.visual_embedder = self.visual_embedder.to(d)
 
