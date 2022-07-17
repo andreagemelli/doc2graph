@@ -7,7 +7,7 @@ from src.amazing_utils import create_folder, get_config
 from src.training.amazing_utils import EarlyStopping, compute_auc_mc, compute_crossentropy_loss, get_binary_accuracy_and_f1, get_device, get_f1
 from src.data.dataloader import Document2Graph
 from src.paths import CHECKPOINTS, NAF, OUTPUTS
-from src.training.models import SetModel
+from src.models.graphs import SetModel
 
 
 def link_and_rec(args):

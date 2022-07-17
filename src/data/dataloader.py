@@ -72,7 +72,7 @@ class Document2Graph(data.Dataset):
             tuple: DGL Graph and label
         """
         graphs, node_labels, edge_labels, features = self.GB.get_graph(self.src_path, self.src_data)
-        self.feature_chunks = self.FB.add_features(graphs, features)
+        self.feature_chunks, self.num_mods = self.FB.add_features(graphs, features)
         return graphs, node_labels, edge_labels, features['paths']
     
     def label2class(self, label, node=True, edge=False):
@@ -100,6 +100,7 @@ class Document2Graph(data.Dataset):
                 self.graphs[id] = self.GB.balance_edges(self.graphs[id], self.edge_num_classes, cls = cls)
     
     def get_chunks(self):
+        if len(self.feature_chunks) != self.num_mods: self.feature_chunks.pop(0)
         return self.feature_chunks
     
     def print_graph(self, num=None, labels_ids=None, name='doc_graph'):

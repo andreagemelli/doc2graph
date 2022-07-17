@@ -15,7 +15,7 @@ import shutil
 import yaml
 import numpy as np
 
-from src.paths import CONFIGS, OUTPUTS, RESULTS, WEIGHTS
+from src.paths import CHECKPOINTS, CONFIGS, OUTPUTS, RESULTS, WEIGHTS
 
 
 class EarlyStopping:
@@ -81,7 +81,7 @@ class EarlyStopping:
 
     def save_checkpoint(self):
         '''Saves model when validation acc increase.'''
-        torch.save(self.model.state_dict(), WEIGHTS / f'{self.name}.pt')
+        torch.save(self.model.state_dict(), CHECKPOINTS / f'{self.name}.pt')
 
 def save_best_results(best_params : dict, rm_logs : bool = False) -> None:
     """Save best results for cross validation.

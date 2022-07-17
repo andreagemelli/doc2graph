@@ -1,5 +1,4 @@
 import random
-import fasttext.util
 import spacy
 import torch
 import torchvision
@@ -7,11 +6,12 @@ from tqdm import tqdm
 from PIL import Image, ImageDraw
 import segmentation_models_pytorch as smp
 import torchvision.transforms.functional as tvF
+import numpy as np
 
-from src.data.amazing_utils import transform_image
+from src.data.amazing_utils import to_bin, transform_image
 from src.data.amazing_utils import distance, get_histogram
 from src.amazing_utils import get_config
-from src.paths import CHECKPOINTS, FUDGE, MODELS, ROOT
+from src.paths import CHECKPOINTS, FUDGE, ROOT
 
 import sys, os
 sys.path.append(os.path.join(ROOT,'FUDGE'))
@@ -62,13 +62,17 @@ class FeatureBuilder():
             
             # 'geometrical' features
             if self.add_geom:
+                
+                #boxs = torch.tensor([scale(box, size) for box in features['boxs'][id]]).to(self.device)
+                #boxs = self.fourier_tf(boxs)
                 [feats[idx].extend(scale(box, size)) for idx, box in enumerate(features['boxs'][id])]
+                #[feats[idx].extend(box) for idx, box in enumerate(boxs)]
                 chunks.append(4)
             
             if self.add_hist:
                 # HISTOGRAM OF TEXT
-                [feats[idx].extend(hist) for idx, hist in enumerate(get_histogram(features['texts'][id]))]
-                chunks.append(4)
+                # [feats[idx].extend(hist) for idx, hist in enumerate(get_histogram(features['texts'][id]))]
+                g.ndata['hist'] = torch.tensor([hist for hist in get_histogram(features['texts'][id])], dtype=torch.float32)
             
             # textual features
             if self.add_embs:
@@ -115,7 +119,8 @@ class FeatureBuilder():
                     device='cuda:0',
                     detect = False)
                 
-                visual_emb = torch.tensor(visual_emb).to(self.device)
+                # visual_emb = torch.tensor(visual_emb).to(self.device)
+                visual_emb = visual_emb.clone().detach().to(self.device)
                 # visual_emb = torch.tensor(visual_emb.clone().detach()).to(self.device)
                 
                 bboxs = [torch.Tensor(b) for b in features['boxs'][id]]
@@ -140,13 +145,11 @@ class FeatureBuilder():
                 
                 for pair in zip(srcs, dsts):
                     dist, angle = distance(features['boxs'][id][pair[0]], features['boxs'][id][pair[1]])
-                    
                     distances.append(dist)
-                    angles.append(angle/360)
+                    angles.append(angle)
                 
                 m = max(distances)
-                # m = math.sqrt(size[0]**2 + size[1]**2)
-                polar_coordinates = torch.tensor([[a, 1- d/m] for a, d in zip(angles, distances)], dtype=torch.float32)
+                polar_coordinates = to_bin(distances, angles)
                 g.edata['feat'] = polar_coordinates
 
             else:
@@ -158,15 +161,10 @@ class FeatureBuilder():
 
             distances = torch.tensor([(1-d/m) for d in distances], dtype=torch.float32)
             tresh_dist = torch.where(distances > 0.9, torch.full_like(distances, 0.1), torch.zeros_like(distances))
-            # tresh_dist = torch.zeros_like(distances)
-            num_nodes = len(features['boxs'][id]) - 1
-            # k = min(num_nodes + 1, 20)
-            # for n in range(num_nodes + 1):
-            #     closest_k = torch.topk(distances[n*num_nodes:(n+1)*num_nodes], k).indices + torch.tensor(num_nodes * n)
-            #     tresh_dist[closest_k] = .5
             g.edata['weights'] = tresh_dist
 
             norm = []
+            num_nodes = len(features['boxs'][id]) - 1
             for n in range(num_nodes + 1):
                 neigs = torch.count_nonzero(tresh_dist[n*num_nodes:(n+1)*num_nodes]).tolist()
                 try: norm.append([1. / neigs])
@@ -196,7 +194,12 @@ class FeatureBuilder():
                     
                     img.save(f'esempi/FUNSD/edges.png')
 
-        return chunks
+        return chunks, len(chunks)
+    
+    def fourier_tf(self, x):
+        B_gauss = torch.randn((50, 4)).to(self.device) * 10
+        x_proj = (2. * np.pi * x) @ B_gauss.t()
+        return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1).tolist()
     
     def get_info(self):
         print(f"-> textual feats: {self.add_embs}\n-> visual feats: {self.add_visual}\n-> edge feats: {self.add_eweights}")

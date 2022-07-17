@@ -31,7 +31,7 @@ def distance(rectA, rectB):
     sc = center(rectA)
     ec = center(rectB)
     new_ec = (ec[0] - sc[0], ec[1] - sc[1])
-    angle = math.degrees(math.atan2(new_ec[1], new_ec[0])) % 360
+    angle = int(math.degrees(math.atan2(new_ec[1], new_ec[0])) % 360)
     
     if rect_intersect:
         return 0, angle
@@ -152,3 +152,29 @@ def get_histogram(contents : list) -> list:
         
     return c_histograms
 
+def to_bin(dist, angle, b=8):
+    def isPowerOfTwo(x):
+        return (x and (not(x & (x - 1))) )
+
+    # dist
+    assert isPowerOfTwo(b)
+    m = max(dist) / b
+    new_dist = []
+    for d in dist:
+        bin = int(d / m)
+        if bin >= b: bin = b - 1
+        bin = [int(x) for x in list('{0:0b}'.format(bin))]
+        while len(bin) < sqrt(b): bin.insert(0, 0)
+        new_dist.append(bin)
+    
+    # angle
+    amplitude = 360 / b
+    new_angle = []
+    for a in angle:
+        bin = (a - amplitude / 2) 
+        bin = int(bin / amplitude)
+        bin = [int(x) for x in list('{0:0b}'.format(bin))]
+        while len(bin) < sqrt(b): bin.insert(0, 0)
+        new_angle.append(bin)
+
+    return torch.cat([torch.tensor(new_dist, dtype=torch.float32), torch.tensor(new_angle, dtype=torch.float32)], dim=1)

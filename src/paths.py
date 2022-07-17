@@ -10,7 +10,7 @@ ROOT = Path(config['ROOT'])
 # PROJECT TREE
 DATA = ROOT / 'DATA'
 CONFIGS = ROOT / 'configs'
-MODELS = CONFIGS / 'models'
+CFGM = CONFIGS / 'models'
 OUTPUTS = ROOT / 'outputs'
 WEIGHTS = OUTPUTS / 'weights'
 RUNS = OUTPUTS / 'runs'
@@ -19,7 +19,8 @@ IMGS = OUTPUTS / 'images'
 TRAIN_SAMPLES = OUTPUTS / 'train_samples'
 TEST_SAMPLES = OUTPUTS / 'test_samples'
 TRAINING = ROOT / 'src' / 'training'
-CHECKPOINTS = TRAINING / 'checkpoints'
+MODELS = ROOT / 'src' / 'models'
+CHECKPOINTS = MODELS / 'checkpoints'
 
 # FUNSD
 FUNSD_TRAIN = DATA / 'FUNSD' / 'training_data'
