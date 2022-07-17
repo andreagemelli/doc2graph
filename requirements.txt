@@ -6,13 +6,16 @@ PyYAML==6.0
 scikit_learn==1.0.2
 setuptools==59.2.0
 setuptools_git_versioning==1.9.2
-spacy==3.2.0
+spacy==3.4.0
+pydantic==1.9.1
 python-dotenv==0.20.0
 gitpython==2.1.7
 gitdb2==3.0.1
 matplotlib==3.5.2
-segmentation-models-pytorch == 0.2.1
-fasttext == 0.9.2
-# dgl==0.8.0.post1
-# dgl_cu113==0.7.2
-# torch==1.10.0+cu113
+segmentation-models-pytorch==0.2.1
+fasttext==0.9.2
+dglgo==0.0.1
+dgl==0.6.1
+networkx==2.8.4
+torch==1.12.0
+torchvision==0.13.0

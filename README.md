@@ -14,14 +14,12 @@ Library to convert documents to graphs and perform several tasks on different da
 
 ## Install
 First, install [setuptools-git-versioning](https://pypi.org/project/setuptools-git-versioning/) and doc2graph package itself.
+
 ```
+create -n doc2graph python=3.9 ipython cudatoolkit=11.3 -c anaconda
+conda activate doc2graph
 cd doc2graph
 pip install setuptools-git-versioning && pip install -e .
-```
-Then, install [torch](https://pytorch.org/get-started/locally/), [dgl](https://www.dgl.ai/pages/start.html) and [spacy](https://spacy.io/usage/models#quickstart) dependencies (refer to their get started sections to install different version)
-```
-pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
-pip install dgl-cu113 dglgo -f https://data.dgl.ai/wheels/repo.html
 python -m spacy download en_core_web_lg
 ```
 
@@ -33,11 +31,11 @@ python src/main.py --init
 ```
 2. To train a **GCN** model for **Entity Labeling** on FUNSD (using CPU):
 ```
-python src/main.py
+python src/main.py [SETTINGS]
 ```
 3. To test a trained **GCN** model for **Entity Labeling** on FUNSD (using GPU):
 ```
-python src/main.py --gpu 0 --test --weights node.pt
+python src/main.py [SETTINGS] --gpu 0 --test --weights node.pt
 ```
 
 ### Settings
