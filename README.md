@@ -13,15 +13,23 @@
 Library to convert documents to graphs and perform several tasks on different datasets, e.g. Key Information Extraction on FUNSD.
 
 ## Install
-First, install [setuptools-git-versioning](https://pypi.org/project/setuptools-git-versioning/) and doc2graph package itself.
-
+Setup the initial conda environment
 ```
 create -n doc2graph python=3.9 ipython cudatoolkit=11.3 -c anaconda
 conda activate doc2graph
 cd doc2graph
+```
+
+Then, install [setuptools-git-versioning](https://pypi.org/project/setuptools-git-versioning/) and doc2graph package itself.
+
+```
 pip install setuptools-git-versioning && pip install -e .
 python -m spacy download en_core_web_lg
 ```
+
+If you want to use FUDGE pretrained model to detect entities and get their visual features:
+- refer to [their github](https://github.com/herobd/FUDGE) for installation and weights download
+- replace `run.py` and `model/yolo_box_detector.py` scripts with our custom version from [this drive](https://drive.google.com/drive/folders/1K66A_z-x7cF9piHN_T8TWuJ8k9LOAm7Y?usp=sharing)
 
 ---
 ## Training
@@ -55,10 +63,6 @@ The project can be customized either changing directly `configs/base.yaml` file 
  - --src_type: (string) img, pdf [if src_data is CUSTOM]
 
 Change directly `configs/train.yaml` for training settings or create your own model copying `configs/models/gcn.yaml`.
-
-If you want to use FUDGE pretrained model to detect entities and get their visual features:
-- refer to [their github](https://github.com/herobd/FUDGE) for installation and weights download
-- replace `run.py` and `model/yolo_box_detector.py` scripts with our custom version from [this drive](https://drive.google.com/drive/folders/1K66A_z-x7cF9piHN_T8TWuJ8k9LOAm7Y?usp=sharing)
 
 ## Testing
 ### FUNSD
