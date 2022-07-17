@@ -24,6 +24,8 @@ Then, install [setuptools-git-versioning](https://pypi.org/project/setuptools-gi
 
 ```
 pip install setuptools-git-versioning && pip install -e .
+pip install dglgo==0.0.1
+pip install dgl-cu113==0.8.2 -f https://data.dgl.ai/wheels/repo.html
 python -m spacy download en_core_web_lg
 ```
 
