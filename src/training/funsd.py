@@ -189,7 +189,7 @@ def entity_linking(args):
             e = datetime.now()
             train_name = args.model + f'-{e.strftime("%Y%m%d-%H%M")}'
             models.append(train_name+'.pt')
-            stopper = EarlyStopping(model, name=train_name, metric=cfg_train.stopper_metric, patience=2000)
+            stopper = EarlyStopping(model, name=train_name, metric=cfg_train.stopper_metric, patience=1000)
             writer = SummaryWriter(log_dir=RUNS)
             convert_imgs = transforms.ToTensor()
         

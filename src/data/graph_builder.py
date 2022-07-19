@@ -9,6 +9,7 @@ import dgl
 import random
 import numpy as np
 from tqdm import tqdm
+import xml.etree.ElementTree as ET
 
 
 class GraphBuilder():
@@ -24,6 +25,8 @@ class GraphBuilder():
         
         if src_data == 'FUNSD':
             return self.__fromFUNSD(src_path)
+        elif src_data == 'PAU':
+            return self.__fromPAU(src_path)
         elif src_data == 'NAF':
             return self.__fromNAF(src_path)
         elif src_data == 'CUSTOM':
@@ -307,6 +310,86 @@ class GraphBuilder():
                 img_removed.save(f'esempi/{name}_removed_graph.png')
 
         return graphs, node_labels, edge_labels, features
+    
+    def __fromPAU(self, src: str):
+        graphs, node_labels, edge_labels = list(), list(), list()
+        features = {'paths': [], 'texts': [], 'boxs': []}
+
+        for image in os.listdir(src):
+            if not image.endswith('tif'): continue
+
+            img_name = image.split('.')[0]
+            file_gt = img_name + '_gt.xml'
+            file_ocr = img_name + '_ocr.xml'
+            features['paths'].append(os.path.join(src, image))
+
+            # DOCUMENT REGIONS
+            root = ET.parse(os.path.join(src, file_gt)).getroot()
+            regions = []
+            for parent in root:
+                if parent.tag.split("}")[1] == 'Page':
+                    for child in parent:
+                        region_label = child[0].attrib['value'] 
+                        region_bbox = [int(child[1].attrib['points'].split(" ")[0].split(",")[0].split(".")[0]),
+                                    int(child[1].attrib['points'].split(" ")[1].split(",")[1].split(".")[0]),
+                                    int(child[1].attrib['points'].split(" ")[2].split(",")[0].split(".")[0]),
+                                    int(child[1].attrib['points'].split(" ")[3].split(",")[1].split(".")[0])]
+                        regions.append([region_label, region_bbox])
+                        # print([region_label, region_bbox])
+
+            # DOCUMENT TOKENS
+            root = ET.parse(os.path.join(src, file_ocr)).getroot()
+            tokens_bbox = []
+            tokens_text = []
+            nl = []
+            center = lambda rect: ((rect[2]+rect[0])/2, (rect[3]+rect[1])/2)
+            for parent in root:
+                if parent.tag.split("}")[1] == 'Page':
+                    for child in parent:
+                        if child.tag.split("}")[1] == 'TextRegion':
+                            for elem in child:
+                                if elem.tag.split("}")[1] == 'TextLine':
+                                    for word in elem:
+                                        if word.tag.split("}")[1] == 'Word':
+                                            word_bbox = [int(word[0].attrib['points'].split(" ")[0].split(",")[0].split(".")[0]),
+                                                        int(word[0].attrib['points'].split(" ")[1].split(",")[1].split(".")[0]),
+                                                        int(word[0].attrib['points'].split(" ")[2].split(",")[0].split(".")[0]),
+                                                        int(word[0].attrib['points'].split(" ")[3].split(",")[1].split(".")[0])]
+                                            word_text = word[1][0].text
+                                            c = center(word_bbox)
+                                            for reg in regions:
+                                                r = reg[1]
+                                                if r[0] < c[0] < r[2] and r[1] < c[1] < r[3]:
+                                                    word_label = reg[0]
+                                                    break
+                                            tokens_bbox.append(word_bbox)
+                                            tokens_text.append(word_text)
+                                            nl.append(word_label)
+                                            #print([word_text, word_bbox])
+            
+            features['boxs'].append(tokens_bbox)
+            features['texts'].append(tokens_text)
+            node_labels.append(nl)
+
+            # getting edges
+            if self.edge_type == 'fully':
+                u, v = self.__fully_connected(range(len(tokens_bbox)))
+            elif self.edge_type == 'knn': 
+                u,v = self.__knn(Image.open(os.path.join(src, image)).size, tokens_bbox)
+            else:
+                raise Exception('Other edge types still under development.')
+            
+            el = list()
+            for e in zip(u, v):
+                if (nl[e[0]] == nl[e[1]]) and (nl[e[0]] == 'positions' or nl[e[0]] == 'total'):
+                    el.append('table')
+                else: el.append('none')
+            edge_labels.append(el)
+
+            g = dgl.graph((torch.tensor(u), torch.tensor(v)), num_nodes=len(tokens_bbox), idtype=torch.int32)
+            graphs.append(g)
+
+        return graphs, node_labels, edge_labels, features
 
     def __fromFUNSD(self, src : str):
         """ Parsing FUNSD annotation json files
@@ -315,9 +398,9 @@ class GraphBuilder():
         features = {'paths': [], 'texts': [], 'boxs': []}
         justOne = random.choice(os.listdir(os.path.join(src, 'adjusted_annotations'))).split(".")[0]
 
-        for file in tqdm(os.listdir(os.path.join(src, 'adjusted_annotations')), desc='Creating graphs:'):
+        for file in tqdm(os.listdir(os.path.join(src, 'adjusted_annotations')), desc='Creating graphs'):
             
-            img_name = f'{file.split(".")[0]}.png'
+            img_name = f'{file.split(".")[0]}.jpg'
             img_path = os.path.join(src, 'images', img_name)
             features['paths'].append(img_path)
 
