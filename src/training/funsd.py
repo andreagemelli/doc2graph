@@ -184,21 +184,21 @@ def entity_linking(args):
             ################* STEP 1: CREATE MODEL ################
             model = sm.get_model(None, 2, data.get_chunks())
             optimizer = torch.optim.Adam(model.parameters(), lr=float(cfg_train.lr), weight_decay=float(cfg_train.weight_decay))
-            scheduler = ReduceLROnPlateau(optimizer, 'max', patience=100, min_lr=1e-3, verbose=True, factor=0.01)
+            # scheduler = ReduceLROnPlateau(optimizer, 'max', patience=100, min_lr=1e-3, verbose=True, factor=0.01)
             # scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
             e = datetime.now()
             train_name = args.model + f'-{e.strftime("%Y%m%d-%H%M")}'
             models.append(train_name+'.pt')
             stopper = EarlyStopping(model, name=train_name, metric=cfg_train.stopper_metric, patience=1000)
-            writer = SummaryWriter(log_dir=RUNS)
-            convert_imgs = transforms.ToTensor()
+            # writer = SummaryWriter(log_dir=RUNS)
+            # convert_imgs = transforms.ToTensor()
         
             ################* STEP 2: TRAINING ################
             print("\n### TRAINING ###")
             print(f"-> Training samples: {tg.batch_size}")
             print(f"-> Validation samples: {vg.batch_size}\n")
 
-            im_step = 0
+            # im_step = 0
             for epoch in range(cfg_train.epochs):
                 
                 # if epoch % 5 == 0:

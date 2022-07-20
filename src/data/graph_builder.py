@@ -308,19 +308,20 @@ class GraphBuilder():
                 
                 print("Balanced Links: None {} | Key-Value {} | SameEntity {}".format(num_none, num_pair, num_same))
                 img_removed.save(f'esempi/{name}_removed_graph.png')
-
         return graphs, node_labels, edge_labels, features
     
     def __fromPAU(self, src: str):
         graphs, node_labels, edge_labels = list(), list(), list()
         features = {'paths': [], 'texts': [], 'boxs': []}
 
-        for image in os.listdir(src):
+        for image in tqdm(os.listdir(src), desc='Creating graphs'):
             if not image.endswith('tif'): continue
-
+            
             img_name = image.split('.')[0]
             file_gt = img_name + '_gt.xml'
             file_ocr = img_name + '_ocr.xml'
+            
+            if not os.path.isfile(os.path.join(src, file_gt)) or not os.path.isfile(os.path.join(src, file_ocr)): continue
             features['paths'].append(os.path.join(src, image))
 
             # DOCUMENT REGIONS
@@ -329,7 +330,8 @@ class GraphBuilder():
             for parent in root:
                 if parent.tag.split("}")[1] == 'Page':
                     for child in parent:
-                        region_label = child[0].attrib['value'] 
+                        # print(file_gt)
+                        region_label = child[0].attrib['value']
                         region_bbox = [int(child[1].attrib['points'].split(" ")[0].split(",")[0].split(".")[0]),
                                     int(child[1].attrib['points'].split(" ")[1].split(",")[1].split(".")[0]),
                                     int(child[1].attrib['points'].split(" ")[2].split(",")[0].split(".")[0]),
@@ -388,7 +390,7 @@ class GraphBuilder():
 
             g = dgl.graph((torch.tensor(u), torch.tensor(v)), num_nodes=len(tokens_bbox), idtype=torch.int32)
             graphs.append(g)
-
+        
         return graphs, node_labels, edge_labels, features
 
     def __fromFUNSD(self, src : str):

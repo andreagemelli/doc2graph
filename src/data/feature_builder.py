@@ -43,36 +43,36 @@ class FeatureBuilder():
             # self.text_embedder = fasttext.load_model('cc.en.300.bin')
 
         if self.add_visual:
-            #self.visual_embedder = Unet(encoder_name="mobilenet_v2", encoder_weights=None, in_channels=1, classes=4)
-            self.visual_embedder = torchvision.models.mobilenet_v3_large(pretrained=False)
-            self.visual_embedder.classifier = torch.nn.Linear(960, 16)
-            self.visual_embedder.load_state_dict(torch.load(CHECKPOINTS / 'mobilenet_v3_large.pth')['weights'])
-            self.visual_embedder = self.visual_embedder.features
-            self.visual_embedder = self.visual_embedder.to(d)
+            self.visual_embedder = Unet(encoder_name="mobilenet_v2", encoder_weights=None, in_channels=1, classes=4)
+            self.visual_embedder.load_state_dict(torch.load(CHECKPOINTS / 'unet.pth')['weights'])
+            self.visual_embedder = self.visual_embedder.encoder
+            self.visual_embedder.to(d)
 
         if self.add_fudge:
             self.fudge = FUDGE / 'saved/NAF_detect_augR_staggerLighter.pth'
+        
+        self.sg = lambda rect, s : [rect[0]/s[0], rect[1]/s[1], rect[2]/s[0], rect[3]/s[1]] # scaling by img width and height
     
     def add_features(self, graphs, features):
 
         # rand_id = random.randint(0, len(graphs)-1)
+        # print(features)
 
         for id, g in enumerate(tqdm(graphs, desc='adding features:')):
 
             # positional features
             size = Image.open(features['paths'][id]).size
-            sg = lambda rect, s : [rect[0]/s[0], rect[1]/s[1], rect[2]/s[0], rect[3]/s[1]] # scaling by img width and height
-            sv = lambda r, f : [r[0]*f[1], r[1]*f[0], r[2]*f[1], r[3]*f[0]]
+            # sv = lambda r, f : [r[0]*f[0], r[1]*f[1], r[2]*f[0], r[3]*f[1]]
             feats = [[] for _ in range(len(features['boxs'][id]))]
-            geom = [sg(box, size) for box in features['boxs'][id]]
+            geom = [self.sg(box, size) for box in features['boxs'][id]]
             chunks = []
-            
+
             # 'geometrical' features
             if self.add_geom:
                 
                 #boxs = torch.tensor([scale(box, size) for box in features['boxs'][id]]).to(self.device)
                 #boxs = self.fourier_tf(boxs)
-                [feats[idx].extend(sg(box, size)) for idx, box in enumerate(features['boxs'][id])]
+                [feats[idx].extend(self.sg(box, size)) for idx, box in enumerate(features['boxs'][id])]
                 #[feats[idx].extend(box) for idx, box in enumerate(boxs)]
                 chunks.append(4)
             
@@ -93,26 +93,25 @@ class FeatureBuilder():
             # visual features
             if self.add_visual:
                 # https://pytorch.org/vision/stable/generated/torchvision.ops.roi_align.html?highlight=roi
-                img = Image.open(features['paths'][id]).convert('RGB')
-                img = torchvision.transforms.functional.resize(img, size=(1000, 754))
+                img = Image.open(features['paths'][id])
+                # img = torchvision.transforms.functional.resize(img, size=(1000, 736))
                 visual_emb = self.visual_embedder(tvF.to_tensor(img).unsqueeze_(0).to(self.device)) # output [batch, canali, dim1, dim2]
-                factor = (1000/size[0], 754/size[1])
-                bboxs = [torch.Tensor(sv(b, factor)) for b in features['boxs'][id]]
+                # factor = (1024/size[0], 736/size[1]) # (1, 3, 1024, 736)
+                # bboxs = [torch.Tensor(sv(b, factor)) for b in features['boxs'][id]]
+                bboxs = [torch.Tensor(b) for b in features['boxs'][id]]
                 bboxs = [torch.stack(bboxs, dim=0).to(self.device)]
-                # h = [torchvision.ops.roi_align(input=ve, boxes=bboxs, spatial_scale=1/ min(size[1] / ve.shape[2] , size[0] / ve.shape[3]), output_size=1) for ve in visual_emb[1:]]
-                # h = torch.cat(h, dim=1)
+                h = [torchvision.ops.roi_align(input=ve, boxes=bboxs, spatial_scale=1/ min(size[1] / ve.shape[2] , size[0] / ve.shape[3]), output_size=1) for ve in visual_emb[1:]]
+                h = torch.cat(h, dim=1)
 
-                # yolo = DetectMultiBackend(CHECKPOINTS / 'yolo.pt', device=torch.device(self.device), dnn=False, data='/home/gemelli/projects/doc2graph/src/models/yolo/yolov5/data/coco128.yaml', fp16=False)
+                # yolo = DetectMultiBackend(CHECKPOINTS / 'best.pt', device=torch.device(self.device), dnn=False, data='/home/gemelli/projects/doc2graph/src/models/yolo/yolov5/data/coco128.yaml', fp16=False)
                 # yolo = torch.nn.Sequential(*yolo.model.model[:10])
-                # print(yolo)
                 # transform = torchvision.transforms.Compose([
                 #    torchvision.transforms.PILToTensor()
                 # ])
                 # img = (transform(img).float()).to(self.device)
                 # img = img[None, :, :, :]
                 # yolo_emb = yolo(img)
-                # print(1000 / visual_emb.shape[2] , 754 / visual_emb.shape[3])
-                h = torchvision.ops.roi_align(input=visual_emb, boxes=bboxs, spatial_scale = 1 / min(1000 / visual_emb.shape[2] , 754 / visual_emb.shape[3]), output_size=1)
+                # h = torchvision.ops.roi_align(input=yolo_emb, boxes=bboxs, spatial_scale = 1 / min(1024 / yolo_emb.shape[2] , 736 / yolo_emb.shape[3]), output_size=1)
 
                 # VISUAL FEATURES (RESNET-IMAGENET)
                 [feats[idx].extend(torch.flatten(h[idx]).tolist()) for idx, _ in enumerate(feats)]

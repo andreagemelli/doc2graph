@@ -142,9 +142,10 @@ class E2E(nn.Module):
         # self.m_layers = m_layers
         # for l in range(m_layers):
             # self.message_passing.append(GcnSAGELayer(m_hidden, m_hidden, F.relu, 0.))
-        self.att = GATv2Conv(m_hidden, m_hidden, num_heads=4, residual=True, activation=F.relu, feat_drop=0.2, negative_slope=0)
-        self.pna = PNAConv(m_hidden, m_hidden, aggregators=['mean', 'max', 'min', 'std', 'var', 'sum'], 
-                            scalers=['identity'], delta=2.5, dropout=0.2, num_towers=2, residual=True, edge_feat_size=1)
+        #self.att = GATv2Conv(m_hidden, m_hidden, num_heads=4, residual=True, activation=F.relu, feat_drop=0.2, negative_slope=0)
+        #self.pna = PNAConv(m_hidden, m_hidden, aggregators=['mean', 'max', 'min', 'std', 'var', 'sum'], 
+        #                    scalers=['identity'], delta=2.5, dropout=0.2, num_towers=2, residual=True, edge_feat_size=1)
+        self.message_passing = GcnSAGELayer(m_hidden, m_hidden, F.relu, 0.)
 
         # Define edge predictor layer
         self.edge_pred = MLPPredictor_E2E(m_hidden, hidden_dim, edge_classes, dropout)
@@ -159,11 +160,11 @@ class E2E(nn.Module):
 
         h = self.projector(h)
 
-        h, e = self.att(g, h, get_attention=True)
-        h = torch.mean(h, 1)
-        e = torch.mean(e, 1)
-        h = self.pna(g, h, e)
-        
+        #h, e = self.att(g, h, get_attention=True)
+        #h = torch.mean(h, 1)
+        #e = torch.mean(e, 1)
+        #h = self.pna(g, h, e)
+        h = self.message_passing(g,h)
         n = self.node_pred(h)
         e = self.edge_pred(g, h, n)
         
@@ -312,7 +313,7 @@ class MLPPredictor_E2E(nn.Module):
     def __init__(self, in_features, hidden_dim, out_classes, dropout):
         super().__init__()
         self.out = out_classes
-        self.W1 = nn.Linear(in_features*2 + 10, hidden_dim)
+        self.W1 = nn.Linear(in_features*2 + 18, hidden_dim)
         self.norm = nn.LayerNorm(hidden_dim)
         self.W2 = nn.Linear(hidden_dim, out_classes)
         self.drop = nn.Dropout(dropout)
@@ -322,8 +323,8 @@ class MLPPredictor_E2E(nn.Module):
         h_v = edges.dst['h']
         cls_u = F.softmax(edges.src['cls'], dim=1)
         cls_v = F.softmax(edges.dst['cls'], dim=1)
-        hist_u = edges.src['hist']
-        hist_v = edges.dst['hist']
+        #hist_u = edges.src['hist']
+        #hist_v = edges.dst['hist']
         polar = edges.data['feat']
 
         x = F.relu(self.norm(self.W1(torch.cat((h_u, cls_u, polar, h_v, cls_v), dim=1))))

@@ -3,6 +3,7 @@ from src.data.download import get_data
 from src.training.funsd import train_funsd
 from src.training.naf import train_naf
 from src.amazing_utils import project_tree, set_preprocessing
+from src.training.pau import train_pau
 
 def main():
     parser = argparse.ArgumentParser(description='Training')
@@ -26,7 +27,7 @@ def main():
                         help="add FUDGE visual features to graphs")
     # data
     parser.add_argument("--src-data", type=str, default='FUNSD',
-                        help="which data source to use. It can be FUNSD, NAF or CUSTOM")
+                        help="which data source to use. It can be FUNSD, PAU, NAF or CUSTOM")
     parser.add_argument("--data-type", type=str, default='img',
                         help="if src-data is CUSTOM, define the data source type: img or pdf.")
     # graphs
@@ -42,7 +43,7 @@ def main():
                         help="Training task: 'elab', 'elin' or 'wgrp") 
     parser.add_argument('--test', action="store_true",
                         help="skip training")
-    parser.add_argument('--weights', '-w', type=str, default=None,
+    parser.add_argument('--weights', '-w', nargs='+', type=str, default=None,
                         help="provide a weights file relative path if testing")
          
     args = parser.parse_args()
@@ -61,6 +62,8 @@ def main():
             train_funsd(args)
         elif args.src_data == 'NAF':
             train_naf(args)
+        elif args.src_data == 'PAU':
+            train_pau(args)
 
 
 if __name__ == '__main__':
