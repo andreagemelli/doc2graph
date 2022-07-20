@@ -118,9 +118,14 @@ def load_predictions(name, path_preds, path_gts, path_images):
             end = rand_boxs_preds[d['gt2pred'][link[1]]]
             draw.line((center(start), center(end)), fill='green', width=3)
 
+    bbox_true_positive = len(d["pred2gt"])
+    precision = bbox_true_positive / (bbox_true_positive + len(d["false_positive"]))
+    recall = bbox_true_positive / (bbox_true_positive + len(d["false_negative"]))
+    f1 = (2 * precision * recall) / (precision + recall)
+    
     img.save('prova.png')
 
-    return
+    return f1
 
 def save_results():
     # TODO output json of matching and check with visualization of images.
