@@ -30,6 +30,8 @@ class Document2Graph(data.Dataset):
         self.GB = GraphBuilder()
         self.FB = FeatureBuilder(device)
         self.output_dir = output_dir
+        # TODO: DO A DIFFERENT FILE
+        self.COLORS = {'invoice_info': (150, 75, 0), 'receiver':(0,100,0), 'other':(128, 128, 128), 'supplier': (255, 0, 255), 'positions':(255,140,0), 'total':(0, 255, 255)}
 
         # get graphs
         self.graphs, self.node_labels, self.edge_labels, self.paths = self.__docs2graphs()
@@ -103,26 +105,42 @@ class Document2Graph(data.Dataset):
         if len(self.feature_chunks) != self.num_mods: self.feature_chunks.pop(0)
         return self.feature_chunks
     
-    def print_graph(self, num=None, labels_ids=None, name='doc_graph'):
+    def print_graph(self, num=None, node_labels=None, labels_ids=None, name='doc_graph', bidirect=True, regions=None, preds=None):
         if num is None: num = randint(0, self.__len__()-1)
         graph = self.graphs[num]
         graph_path = self.paths[num]
         graph_img = Image.open(graph_path).convert('RGB')
-        if labels_ids is None: labels_ids = graph.edata['label'].nonzero().flatten().tolist()
+        # if labels_ids is None: labels_ids = graph.edata['label'].nonzero().flatten().tolist()
+        labels_ids = []
         center = lambda rect: ((rect[2]+rect[0])/2, (rect[3]+rect[1])/2)
         graph_draw = ImageDraw.Draw(graph_img)
         w, h = graph_img.size
         boxs = graph.ndata['geom'][:, :4].tolist()
         boxs = [[box[0]*w, box[1]*h, box[2]*w, box[3]*h] for box in boxs]
-        for box in boxs:
-            graph_draw.rectangle(box, outline='blue', width=2)
+
+        if node_labels is not None:
+            for b, box in enumerate(boxs):
+                label = self.node_unique_labels[node_labels[b]]
+                graph_draw.rectangle(box, outline=self.COLORS[label], width=2)
+        else:
+            for box in boxs:
+                graph_draw.rectangle(box, outline='blue', width=2)
+        
+        for region in regions:
+            color = self.COLORS[region[0]]
+            graph_draw.rectangle(region[1], outline=color, width=4)
+        
+        if preds is not None:
+            graph_draw.rectangle(preds, outline='green', width=4)
+        
         u,v = graph.edges()
         for id in labels_ids:
             sc = center(boxs[u[id]])
             ec = center(boxs[v[id]])
             graph_draw.line((sc,ec), fill='violet', width=3)
-            graph_draw.ellipse([(sc[0]-4,sc[1]-4), (sc[0]+4,sc[1]+4)], fill = 'green', outline='black')
-            graph_draw.ellipse([(ec[0]-4,ec[1]-4), (ec[0]+4,ec[1]+4)], fill = 'red', outline='black')
+            if bidirect:
+                graph_draw.ellipse([(sc[0]-4,sc[1]-4), (sc[0]+4,sc[1]+4)], fill = 'green', outline='black')
+                graph_draw.ellipse([(ec[0]-4,ec[1]-4), (ec[0]+4,ec[1]+4)], fill = 'red', outline='black')
 
         graph_img.save(self.output_dir / f'{name}.png')
         return graph_img

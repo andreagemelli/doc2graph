@@ -4,7 +4,7 @@ from pickletools import optimize
 from itsdangerous import json
 import pandas as pd
 import sklearn
-from sklearn.metrics import average_precision_score, f1_score, precision_recall_fscore_support, roc_auc_score, roc_curve
+from sklearn.metrics import average_precision_score, confusion_matrix, f1_score, precision_recall_fscore_support, roc_auc_score, roc_curve
 from sklearn.utils import class_weight
 import torch
 import torch.nn
@@ -302,3 +302,36 @@ def find_optimal_cutoff(target, predicted):
     roc_t = roc.iloc[(roc.tf-0).abs().argsort()[:1]]
 
     return list(roc_t['threshold']) 
+
+def generalized_f1_score(y_true, y_pred, match):
+    # y_true = (y_nodes, y_link)
+    # y_pred = (y_nodes, y_link)
+
+    # # nodes
+    micro_f1_nodes, macro_f1_nodes = 0, 0
+    
+    nodes_confusion_mtx = confusion_matrix(y_true=y_true[0][list(match["pred2gt"].keys())], y_pred=y_pred[0][list(match["pred2gt"].values())], 
+                                           normalize=None)
+    ntp = [nodes_confusion_mtx[i, i] for i in range(nodes_confusion_mtx.shape[0])]
+    nfp = [(nodes_confusion_mtx[:i, i].sum() + nodes_confusion_mtx[i+1:, i].sum()) for i in range(nodes_confusion_mtx.shape[0])]
+    nfn = [(nodes_confusion_mtx[i, :i].sum() + nodes_confusion_mtx[i, i+1:].sum()) for i in range(nodes_confusion_mtx.shape[0])]
+
+    macro_f1_nodes = np.mean([tp / (tp + (0.5 * (fp + len(match["false_positive"]) + fn + len(match["false_negative"])))) for (tp, fp, fn) in zip(ntp, nfp, nfn)])
+    micro_f1_nodes = np.sum(ntp) / (np.sum(ntp) + (0.5 * (np.sum(nfp) + len(match["false_positive"]) + np.sum(nfn) + len(match["false_negative"]))))
+
+    # links
+    micro_f1_links, macro_f1_links = 0, 0
+
+    # links2keep = [idx for idx, link in enumerate(y_true[1]) if (link[0] in match["pred2gt"].values()) and (link[1] in match["pred2gt"].values())]
+    links_confusion_mtx = confusion_matrix(y_true=y_true[1], y_pred=y_pred[1], normalize=None)
+
+    ltp = [links_confusion_mtx[i, i] for i in range(links_confusion_mtx.shape[0])]
+    lfp = [(links_confusion_mtx[:i, i].sum() + links_confusion_mtx[i+1:, i].sum()) for i in range(links_confusion_mtx.shape[0])]
+    lfn = [(links_confusion_mtx[i, :i].sum() + links_confusion_mtx[i, i+1:].sum()) for i in range(links_confusion_mtx.shape[0])]
+
+    # n = len(links2keep) + len(match["false_positive"]) - 1
+    macro_f1_links = np.mean([tp / (tp + (0.5 * (fp + fn + match["n_link_fn"]))) for (tp, fp, fn) in zip(ltp, lfp, lfn)])
+    f1_pairs = [tp / (tp + (0.5 * (fp + fn + match["n_link_fn"]))) for (tp, fp, fn) in zip(ltp, lfp, lfn)][1]
+    micro_f1_links = np.sum(ltp) / (np.sum(ltp) + (0.5 * (np.sum(lfp) + np.sum(lfn) + match["n_link_fn"])))
+
+    return {"nodes": {"micro_f1": micro_f1_nodes, "macro_f1": macro_f1_nodes}, "links": {"micro_f1": micro_f1_links, "macro_f1": macro_f1_links}, "pairs_f1": f1_pairs}

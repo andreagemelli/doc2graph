@@ -313,7 +313,7 @@ class MLPPredictor_E2E(nn.Module):
     def __init__(self, in_features, hidden_dim, out_classes, dropout):
         super().__init__()
         self.out = out_classes
-        self.W1 = nn.Linear(in_features*2 + 18, hidden_dim)
+        self.W1 = nn.Linear(in_features*2 + 14, hidden_dim)
         self.norm = nn.LayerNorm(hidden_dim)
         self.W2 = nn.Linear(hidden_dim, out_classes)
         self.drop = nn.Dropout(dropout)

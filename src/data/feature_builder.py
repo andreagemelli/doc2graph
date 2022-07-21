@@ -44,7 +44,7 @@ class FeatureBuilder():
 
         if self.add_visual:
             self.visual_embedder = Unet(encoder_name="mobilenet_v2", encoder_weights=None, in_channels=1, classes=4)
-            self.visual_embedder.load_state_dict(torch.load(CHECKPOINTS / 'unet.pth')['weights'])
+            self.visual_embedder.load_state_dict(torch.load(CHECKPOINTS / 'backbone_unet_new.pth')['weights'])
             self.visual_embedder = self.visual_embedder.encoder
             self.visual_embedder.to(d)
 

@@ -11,8 +11,11 @@ import time
 from knockknock import discord_sender
 from statistics import mean
 import numpy as np
+import xml.etree.ElementTree as ET
+from PIL import Image
 
 from src.data.dataloader import Document2Graph
+from src.data.preprocessing import match_pred_w_gt
 from src.paths import *
 from src.models.graphs import SetModel
 from src.amazing_utils import get_config
@@ -225,13 +228,80 @@ def train_pau(args):
     
     test_graph.edata['preds'] = epreds
     test_graph.ndata['preds'] = npreds
+    t_f1 = 0
+    t_precision = 0
+    t_recall = 0
+    no_table = 0
+    tables = 0
+
     for g, graph in enumerate(dgl.unbatch(test_graph)):
         etargets = graph.edata['preds']
         ntargets = graph.ndata['preds']
         kvp_ids = etargets.nonzero().flatten().tolist()
-        test_data.print_graph(num=g, labels_ids=kvp_ids, name=f'test_{g}')
-        test_data.print_graph(num=g, name=f'test_labels_{g}')
 
+        table_g = dgl.edge_subgraph(graph, torch.tensor(kvp_ids, dtype=torch.int32).to(device))
+        table_nodes = table_g.ndata['geom']
+        try:
+            table_topleft, _ = torch.min(table_nodes, 0)
+            table_bottomright, _ = torch.max(table_nodes, 0)
+            table = torch.cat([table_topleft[:2], table_bottomright[2:]], 0)
+        except:
+            table = None
+        
+        img_path = test_data.paths[g]
+        w, h = Image.open(img_path).size
+        gt_path = img_path.split(".")[0]
+
+        root = ET.parse(gt_path + '_gt.xml').getroot()
+        regions = []
+        for parent in root:
+            if parent.tag.split("}")[1] == 'Page':
+                for child in parent:
+                    # print(file_gt)
+                    region_label = child[0].attrib['value']
+                    if region_label != 'positions': continue
+                    region_bbox = [int(child[1].attrib['points'].split(" ")[0].split(",")[0].split(".")[0]),
+                                int(child[1].attrib['points'].split(" ")[1].split(",")[1].split(".")[0]),
+                                int(child[1].attrib['points'].split(" ")[2].split(",")[0].split(".")[0]),
+                                int(child[1].attrib['points'].split(" ")[3].split(",")[1].split(".")[0])]
+                    regions.append([region_label, region_bbox])
+
+        table_regions = [region[1] for region in regions if region[0]=='positions']
+        if table is None and len(table_regions) !=0: 
+            t_f1 += 0
+            t_precision += 0
+            t_recall += 0
+            tables += len(table_regions)
+        elif table is None and len(table_regions) == 0:
+            no_table -= 1
+            continue
+        elif table is not None and len(table_regions) ==0:
+            t_f1 += 0
+            t_precision += 0
+            t_recall += 0
+            no_table -= 1
+        else:
+            table = [[t[0]*w, t[1]*h, t[2]*w, t[3]*h] for t in [table.flatten().tolist()]][0]
+            # d = match_pred_w_gt(torch.tensor(boxs_preds[idx]), torch.tensor(gt))
+            d = match_pred_w_gt(torch.tensor(table).view(-1, 4), torch.tensor(table_regions).view(-1, 4))
+            bbox_true_positive = len(d["pred2gt"])
+            p = bbox_true_positive / (bbox_true_positive + len(d["false_positive"]))
+            r = bbox_true_positive / (bbox_true_positive + len(d["false_negative"]))
+            try:
+                t_f1 += (2 * p * r) / (p + r)
+            except:
+                t_f1 += 0
+            t_precision += p
+            t_recall += r
+            tables += len(table_regions)
+
+            test_data.print_graph(num=g, node_labels = None, labels_ids=None, name=f'test_{g}', bidirect=False, regions=regions, preds=table)
+
+        # test_data.print_graph(num=g, name=f'test_labels_{g}')
+    t_recall = t_recall / (tables + no_table)
+    t_precision = t_precision / (tables + no_table)
+    t_f1 = (2 * t_precision * t_recall) / (t_precision + t_recall)
+    print(t_precision, t_recall, t_f1)
     if not args.test:
         feat_n, feat_e = get_features(args)
         #? if skipping training, no need to save anything
@@ -260,12 +330,15 @@ def train_pau(args):
 		        'f1-classes': classes_f1,
                 'nodes-f1': [macro, micro],
                 'std-pairs': np.std(nodes_micro),
-                'mean-pairs': mean(nodes_micro)
+                'mean-pairs': mean(nodes_micro),
+                'table-detection': [t_precision / (tables + no_table), t_recall / (tables + no_table), t_f1 / (tables + no_table)]
             }}
         save_test_results(train_name, results)
     
     print("END TRAINING:", time.time() - start_training)
-    return {'best_model': best_model, 'Nodes-F1': {'max': max(nodes_micro), 'mean': mean(nodes_micro), 'std': np.std(nodes_micro)}, 'Edges-F1': {'max': max(edges_f1), 'mean': mean(edges_f1), 'std': np.std(edges_f1)}}
+    return {'best_model': best_model, 'Nodes-F1': {'max': max(nodes_micro), 'mean': mean(nodes_micro), 'std': np.std(nodes_micro)}, 
+            'Edges-F1': {'max': max(edges_f1), 'mean': mean(edges_f1), 'std': np.std(edges_f1)}, 
+            'Table Detection': {'precision': t_precision / (tables + no_table), 'recall': t_recall / (tables + no_table), 'f1': t_f1 / (tables + no_table)}}
     # # TODO: FIX and CHECK
     # pairs_ids = preds.nonzero().flatten().tolist()
     # u, v = test_graph.edges()

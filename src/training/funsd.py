@@ -11,8 +11,10 @@ import time
 from knockknock import discord_sender
 from statistics import mean
 import numpy as np
+from PIL import Image
 
 from src.data.dataloader import Document2Graph
+from src.data.preprocessing import match_pred_w_gt
 from src.paths import *
 from src.models.graphs import SetModel
 from src.amazing_utils import get_config
@@ -291,7 +293,7 @@ def entity_linking(args):
         ################* SKIP TRAINING ################
         print("\n### SKIP TRAINING ###")
         print(f"-> loading {args.weights}")
-        models = [args.weights]
+        models = args.weights
         
     
     ################* STEP 3: TESTING ################
@@ -340,16 +342,41 @@ def entity_linking(args):
         auc = compute_auc_mc(scores.to(device), test_graph.edata['label'].to(device))
         
         _, preds = torch.max(F.softmax(scores, dim=1), dim=1)
+        test_graph.edata['preds'] = preds
 
         accuracy, f1 = get_binary_accuracy_and_f1(preds, test_graph.edata['label'])
         _, classes_f1 = get_binary_accuracy_and_f1(preds, test_graph.edata['label'], per_class=True)
     
-    test_graph.edata['preds'] = preds
-    for g, graph in enumerate(dgl.unbatch(test_graph)):
-        targets = graph.edata['preds']
-        kvp_ids = targets.nonzero().flatten().tolist()
-        test_data.print_graph(num=g, labels_ids=kvp_ids, name=f'test_{g}')
-        test_data.print_graph(num=g, name=f'test_labels_{g}')
+    # test_graph.edata['preds'] = preds
+    # for g, graph in enumerate(dgl.unbatch(test_graph)):
+    #     targets = graph.edata['preds']
+    #     kvp_ids = targets.nonzero().flatten().tolist()
+    #     test_data.print_graph(num=g, labels_ids=kvp_ids, name=f'test_{g}')
+    #     test_data.print_graph(num=g, name=f'test_labels_{g}')
+
+    farlocco = dgl.unbatch(test_graph)[0]
+
+    links_gts = []
+    gts_name = test_data.paths[0].split(".")[0].split("/")[-1] + '.json'
+    with open(os.path.join(FUNSD_TEST, 'adjusted_annotations', gts_name), 'r') as f:
+        form = json.load(f)['form']
+        pair_labels = []
+        ids = []
+        for elem in form:
+            ids.append(elem['id'])
+            [pair_labels.append(pair) for pair in elem['linking']]
+
+        for p, pair in enumerate(pair_labels):
+            pair_labels[p] = [ids.index(pair[0]), ids.index(pair[1])]
+
+        links_gts.append(pair_labels)
+
+    d = match_pred_w_gt(torch.tensor(farlocco.ndata['geom']).cpu(), torch.tensor(farlocco.ndata['geom']).cpu(), links_gts)
+
+    enrico = generalized_f1_score(y_true=(np.array([]), farlocco.edata['label'].detach().cpu().numpy()), 
+                                  y_pred=(np.array([]), farlocco.edata['preds'].detach().cpu().numpy()), 
+                                  match=d)
+    _, farlocco_f1 = get_binary_accuracy_and_f1(farlocco.edata['preds'], farlocco.edata['label'], per_class=True)
 
     if not args.test:
         feat_n, feat_e = get_features(args)
@@ -385,8 +412,10 @@ def entity_linking(args):
         save_test_results(train_name, results)
     
     print("END TRAINING:", time.time() - start_training)
-    return {'best_model': best_model, 'Pairs-F1': {'max': max(pair_scores), 'mean': mean(pair_scores), 'std': np.std(pair_scores)}}
+    return {'best_model': best_model, 'Pairs-F1': {'max': max(pair_scores), 'mean': mean(pair_scores), 'std': np.std(pair_scores)}, 'ENRICOS': enrico, 'farlocco': farlocco_f1}
 
+webhook_url = "https://discord.com/api/webhooks/997898000695316581/mIlHnPn95KTOYPS-hQFQFwaEhk0pa82ZR12OMZWZqXWwlH7fHjMZGnCXa03nvO_4cMzw"
+@discord_sender(webhook_url=webhook_url)
 def e2e(args):
 
     # configs
@@ -400,20 +429,18 @@ def e2e(args):
         ################* STEP 0: LOAD DATA ################
         data = Document2Graph(name='FUNSD TRAIN', src_path=FUNSD_TRAIN, device = device, output_dir=TRAIN_SAMPLES)
         data.get_info()
-        data.print_graph(name='example')
+        # data.print_graph(name='example')
 
         # ss = ShuffleSplit(n_splits=10, test_size=cfg_train.val_size, random_state=cfg_train.seed)
         ss = KFold(n_splits=10, shuffle=True, random_state=cfg_train.seed)
         cv_indices = ss.split(data.graphs)
-        best_model = ''
-        best_val_auc = 0
         
+        models = []
+        train_index, val_index = next(ss.split(data.graphs))
 
         for cvs in cv_indices:
 
             train_index, val_index = cvs
-            # rand_tid = [choice(train_index) for i in range(5)]
-            # rand_vid = [choice(val_index) for i in range(5)]
 
             # TRAIN
             train_graphs = [data.graphs[i] for i in train_index]
@@ -425,14 +452,15 @@ def e2e(args):
             vg = vg.int().to(device)
             
             ################* STEP 1: CREATE MODEL ################
-            model = sm.get_model(4, 2, data.get_chunks())
+            model = sm.get_model(data.node_num_classes, data.edge_num_classes, data.get_chunks())
             optimizer = torch.optim.AdamW(model.parameters(), lr=float(cfg_train.lr), weight_decay=float(cfg_train.weight_decay))
             # scheduler = ReduceLROnPlateau(optimizer, 'max', patience=400, min_lr=1e-3, verbose=True, factor=0.01)
             # scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
             e = datetime.now()
             train_name = args.model + f'-{e.strftime("%Y%m%d-%H%M")}'
+            models.append(train_name+'.pt')
             stopper = EarlyStopping(model, name=train_name, metric=cfg_train.stopper_metric, patience=2000)
-            writer = SummaryWriter(log_dir=RUNS)
+            # writer = SummaryWriter(log_dir=RUNS)
             # convert_imgs = transforms.ToTensor()
         
             ################* STEP 2: TRAINING ################
@@ -483,9 +511,9 @@ def e2e(args):
                 elif cfg_train.stopper_metric == 'acc':
                     step_value = val_auc
                 
-                if val_auc > best_val_auc:
-                    best_val_auc = val_auc
-                    best_model = train_name
+                # if val_auc > best_val_auc:
+                #     best_val_auc = val_auc
+                #     best_model = train_name
                 
                 ss = stopper.step(step_value)
 
@@ -520,25 +548,23 @@ def e2e(args):
                 if ss == 'stop':
                     break
 
-                writer.add_scalars('AUC-PR', {'train': auc, 'val': val_auc}, epoch)
-                writer.add_scalars('LOSS', {'train': tot_loss.item(), 'val': val_tot_loss.item()}, epoch)
-                writer.add_scalar('LR', optimizer.param_groups[0]['lr'], epoch)
+                # writer.add_scalars('AUC-PR', {'train': auc, 'val': val_auc}, epoch)
+                # writer.add_scalars('LOSS', {'train': tot_loss.item(), 'val': val_tot_loss.item()}, epoch)
+                # writer.add_scalar('LR', optimizer.param_groups[0]['lr'], epoch)
 
                 # train_grid = torchvision.utils.make_grid(train_imgs)
                 # writer.add_image('train_images', train_grid, im_step)
                 # val_grid = torchvision.utils.make_grid(val_imgs)
                 # writer.add_image('val_images', val_grid, im_step)
         
-        print("LOADING: ", best_model+'.pt')
-        model.load_state_dict(torch.load(WEIGHTS / (best_model+'.pt')))
+        # print("LOADING: ", best_model+'.pt')
+        # model.load_state_dict(torch.load(WEIGHTS / (best_model+'.pt')))
     
     else:
         ################* SKIP TRAINING ################
         print("\n### SKIP TRAINING ###")
         print(f"-> loading {args.weights}")
-        data = Document2Graph(name='FUNSD TRAIN', src_path=FUNSD_TRAIN, device = device)
-        model = sm.get_model(4, 2, data.get_chunks())
-        model.load_state_dict(torch.load(CHECKPOINTS / args.weights))
+        models = args.weights
     
     ################* STEP 3: TESTING ################
     print("\n### TESTING ###")
@@ -547,73 +573,110 @@ def e2e(args):
     test_data = Document2Graph(name='FUNSD TEST', src_path=FUNSD_TEST, device = device, output_dir=TEST_SAMPLES)
     test_data.get_info()
     
+    model = sm.get_model(test_data.node_num_classes, test_data.edge_num_classes, test_data.get_chunks())
+    best_model = ''
+    nodes_micro = []
+    edges_f1 = []
     test_graph = dgl.batch(test_data.graphs).to(device)
 
+    for m in models:
+        model.load_state_dict(torch.load(CHECKPOINTS / m))
+        model.eval()
+        with torch.no_grad():
+
+            n, e = model(test_graph, test_graph.ndata['feat'].to(device))
+            auc = compute_auc_mc(e.to(device), test_graph.edata['label'].to(device))
+            scores, preds = torch.max(F.softmax(e, dim=1), dim=1)
+
+            accuracy, f1 = get_binary_accuracy_and_f1(preds, test_graph.edata['label'])
+            _, classes_f1 = get_binary_accuracy_and_f1(preds, test_graph.edata['label'], per_class=True)
+            edges_f1.append(classes_f1[1])
+
+            macro, micro = get_f1(n, test_graph.ndata['label'].to(device))
+            nodes_micro.append(micro)
+            if classes_f1[1] >= max(edges_f1):
+                best_model = m
+
+            test_graph.edata['preds'] = preds
+
+            # for g, graph in enumerate(dgl.unbatch(test_graph)):
+            #     targets = graph.edata['preds']
+            #     kvp_ids = targets.nonzero().flatten().tolist()
+            #     test_data.print_graph(num=g, labels_ids=kvp_ids, name=f'test_{g}')
+            #     test_data.print_graph(num=g, name=f'test_labels_{g}')
+
+        ################* STEP 4: RESULTS ################
+        print("\n### RESULTS ###")
+        print("AUC {:.4f}".format(auc))
+        print("Accuracy {:.4f}".format(accuracy))
+        print("F1 Edges: Macro {:.4f} - Micro {:.4f}".format(f1[0], f1[1]))
+        print("F1 Edges: None {:.4f} - Pairs {:.4f}".format(classes_f1[0], classes_f1[1]))
+        print("F1 Nodes: Macro {:.4f} - Micro {:.4f}".format(macro, micro))
+
+    print(f"\nLoading best model {best_model}")
+    model.load_state_dict(torch.load(CHECKPOINTS / best_model))
     model.eval()
     with torch.no_grad():
 
-        n, e = model(test_graph, test_graph.ndata['feat'].to(device))
+        n, e= model(test_graph, test_graph.ndata['feat'].to(device))
         auc = compute_auc_mc(e.to(device), test_graph.edata['label'].to(device))
-        scores, preds = torch.max(F.softmax(e, dim=1), dim=1)
+        
+        _, epreds = torch.max(F.softmax(e, dim=1), dim=1)
+        _, npreds = torch.max(F.softmax(n, dim=1), dim=1)
+        test_graph.edata['preds'] = epreds
+        test_graph.ndata['preds'] = npreds
+        test_graph.ndata['net'] = n
 
-        test_graph.edata['preds'] = preds
-
-        for g, graph in enumerate(dgl.unbatch(test_graph)):
-            targets = graph.edata['preds']
-            kvp_ids = targets.nonzero().flatten().tolist()
-            test_data.print_graph(num=g, labels_ids=kvp_ids, name=f'test_{g}')
-            test_data.print_graph(num=g, name=f'test_labels_{g}')
-
-        accuracy, f1 = get_binary_accuracy_and_f1(preds, test_graph.edata['label'])
-        _, classes_f1 = get_binary_accuracy_and_f1(preds, test_graph.edata['label'], per_class=True)
-
+        accuracy, f1 = get_binary_accuracy_and_f1(epreds, test_graph.edata['label'])
+        _, classes_f1 = get_binary_accuracy_and_f1(epreds, test_graph.edata['label'], per_class=True)
         macro, micro = get_f1(n, test_graph.ndata['label'].to(device))
+    
+    ##### FARLOCCCOOOOOO #######
 
-    ################* STEP 4: RESULTS ################
-    print("\n### RESULTS ###")
+    farlocco = dgl.unbatch(test_graph)[0]
+
+    links_gts = []
+    gts_name = test_data.paths[0].split(".")[0].split("/")[-1] + '.json'
+    with open(os.path.join(FUNSD_TEST, 'adjusted_annotations', gts_name), 'r') as f:
+        form = json.load(f)['form']
+        pair_labels = []
+        ids = []
+        for elem in form:
+            ids.append(elem['id'])
+            [pair_labels.append(pair) for pair in elem['linking']]
+
+        for p, pair in enumerate(pair_labels):
+            pair_labels[p] = [ids.index(pair[0]), ids.index(pair[1])]
+
+        links_gts.append(pair_labels)
+
+    d = match_pred_w_gt(torch.tensor(farlocco.ndata['geom']).cpu(), torch.tensor(farlocco.ndata['geom']).cpu(), links_gts)
+
+    enrico = generalized_f1_score(y_true=(farlocco.ndata['label'].detach().cpu().numpy(), farlocco.edata['label'].detach().cpu().numpy()), 
+                                  y_pred=(farlocco.ndata['preds'].detach().cpu().numpy(), farlocco.edata['preds'].detach().cpu().numpy()), 
+                                  match=d)
+    _, farlocco_f1 = get_binary_accuracy_and_f1(farlocco.edata['preds'], farlocco.edata['label'], per_class=True)
+    _, farlocco_micro = get_f1(farlocco.ndata['net'], farlocco.ndata['label'].to(device))
+
+    ###########################
+
+    # ################* STEP 4: RESULTS ################
+    print("\n### RESULTS POST-PROCESSING###")
     print("AUC {:.4f}".format(auc))
     print("Accuracy {:.4f}".format(accuracy))
     print("F1 Edges: Macro {:.4f} - Micro {:.4f}".format(f1[0], f1[1]))
     print("F1 Edges: None {:.4f} - Pairs {:.4f}".format(classes_f1[0], classes_f1[1]))
     print("F1 Nodes: Macro {:.4f} - Micro {:.4f}".format(macro, micro))
 
-    # # TODO: FIX and CHECK
-    # pairs_ids = preds.nonzero().flatten().tolist()
-    # u, v = test_graph.edges()
-
-    # for idd, dst in enumerate(v.tolist()):
-    #     if idd not in pairs_ids: continue
-    #     scores_ = [scores[idd]]
-    #     id_ = [idd]
-    #     for ido, oth in enumerate(v.tolist()):
-    #         if ido != idd and dst == oth:
-    #             id_.append(ido)
-    #             scores_.append(scores[ido])
-    #     id_.pop(scores_.index(max(scores_)))
-    #     for id in id_: preds[id] = 0
-    
-    # test_graph.edata['preds'] = preds
-
-    # accuracy, f1 = get_binary_accuracy_and_f1(preds, test_graph.edata['label'])
-    # _, classes_f1 = get_binary_accuracy_and_f1(preds, test_graph.edata['label'], per_class=True)
-
-    # macro, micro = get_f1(n, test_graph.ndata['label'].to(device))
-
-    # ################* STEP 4: RESULTS ################
-    # print("\n### RESULTS POST-PROCESSING###")
-    # print("AUC {:.4f}".format(auc))
-    # print("Accuracy {:.4f}".format(accuracy))
-    # print("F1 Edges: Macro {:.4f} - Micro {:.4f}".format(f1[0], f1[1]))
-    # print("F1 Edges: None {:.4f} - Pairs {:.4f}".format(classes_f1[0], classes_f1[1]))
-    # print("F1 Nodes: Macro {:.4f} - Micro {:.4f}".format(macro, micro))
-
     if not args.test:
         feat_n, feat_e = get_features(args)
         #? if skipping training, no need to save anything
         model = get_config(CFGM / args.model)
         results = {'MODEL': {
-            'name': sm.get_name(), 
-            'net-params': sm.get_total_params(),
+            'name': sm.get_name(),
+            'weights': best_model,
+            'net-params': sm.get_total_params(), 
+            'num-layers': model.num_layers,
             'projector-output': model.out_chunks,
             'dropout': model.dropout,
             'lastFC': model.hidden_dim
@@ -629,15 +692,16 @@ def e2e(args):
             },
             'RESULTS': {
                 'val-loss': stopper.best_score, 
-                'f1-edge': f1,
-		        'f1-edge': classes_f1,
-                'f1-nodes': [macro, micro],
-                'AUC-PR': auc,
+                'f1-scores': f1,
+		        'f1-classes': classes_f1,
+                'nodes-f1': [macro, micro],
+                'std-pairs': np.std(edges_f1),
+                'mean-pairs': mean(edges_f1)
             }}
         save_test_results(train_name, results)
     
     print("END TRAINING:", time.time() - start_training)
-    return
+    return {'ENRICO': enrico, 'falrocco_f1': farlocco_f1, 'farlocco_micro': farlocco_micro}
 
 def train_funsd(args):
 

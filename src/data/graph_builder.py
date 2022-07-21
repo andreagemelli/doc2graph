@@ -2,6 +2,7 @@ import json
 import os
 from PIL import Image, ImageDraw
 from src.data.amazing_utils import distance, organize_naf
+from src.data.preprocessing import load_predictions
 from src.paths import NAF
 from src.amazing_utils import get_config
 import torch
@@ -398,56 +399,57 @@ class GraphBuilder():
         """
         graphs, node_labels, edge_labels = list(), list(), list()
         features = {'paths': [], 'texts': [], 'boxs': []}
-        justOne = random.choice(os.listdir(os.path.join(src, 'adjusted_annotations'))).split(".")[0]
-
-        for file in tqdm(os.listdir(os.path.join(src, 'adjusted_annotations')), desc='Creating graphs'):
+        # justOne = random.choice(os.listdir(os.path.join(src, 'adjusted_annotations'))).split(".")[0]
+        test = src.split("/")[-1] == 'testing_data'
+        if not test:
+            for file in tqdm(os.listdir(os.path.join(src, 'adjusted_annotations')), desc='Creating graphs'):
             
-            img_name = f'{file.split(".")[0]}.jpg'
-            img_path = os.path.join(src, 'images', img_name)
-            features['paths'].append(img_path)
+                img_name = f'{file.split(".")[0]}.jpg'
+                img_path = os.path.join(src, 'images', img_name)
+                features['paths'].append(img_path)
 
-            with open(os.path.join(src, 'adjusted_annotations', file), 'r') as f:
-                form = json.load(f)['form']
+                with open(os.path.join(src, 'adjusted_annotations', file), 'r') as f:
+                    form = json.load(f)['form']
 
-            # getting infos
-            boxs, texts, ids, nl = list(), list(), list(), list()
-            pair_labels = list()
+                # getting infos
+                boxs, texts, ids, nl = list(), list(), list(), list()
+                pair_labels = list()
 
-            for elem in form:
-                boxs.append(elem['box'])
-                texts.append(elem['text'])
-                nl.append(elem['label'])
-                ids.append(elem['id'])
-                [pair_labels.append(pair) for pair in elem['linking']]
-                # linking (list) and id (int)
-            
-            for p, pair in enumerate(pair_labels):
-                pair_labels[p] = [ids.index(pair[0]), ids.index(pair[1])]
-            
-            node_labels.append(nl)
-            features['texts'].append(texts)
-            features['boxs'].append(boxs)
-            
-            # getting edges
-            if self.edge_type == 'fully':
-                u, v = self.__fully_connected(range(len(boxs)))
-            elif self.edge_type == 'knn': 
-                u,v = self.__knn(Image.open(img_path).size, boxs)
-            else:
-                raise Exception('Other edge types still under development.')
-            
-            el = list()
-            for e in zip(u, v):
-                edge = [e[0], e[1]]
-                # reverse_edge = [e[1], e[0]]
-                if edge in pair_labels: el.append('pair')
-                # elif reverse_edge in pair_labels: el.append('pair')
-                else: el.append('none')
-            edge_labels.append(el)
+                for elem in form:
+                    boxs.append(elem['box'])
+                    texts.append(elem['text'])
+                    nl.append(elem['label'])
+                    ids.append(elem['id'])
+                    [pair_labels.append(pair) for pair in elem['linking']]
+                    # linking (list) and id (int)
+                
+                for p, pair in enumerate(pair_labels):
+                    pair_labels[p] = [ids.index(pair[0]), ids.index(pair[1])]
+                
+                node_labels.append(nl)
+                features['texts'].append(texts)
+                features['boxs'].append(boxs)
+                
+                # getting edges
+                if self.edge_type == 'fully':
+                    u, v = self.__fully_connected(range(len(boxs)))
+                elif self.edge_type == 'knn': 
+                    u,v = self.__knn(Image.open(img_path).size, boxs)
+                else:
+                    raise Exception('Other edge types still under development.')
+                
+                el = list()
+                for e in zip(u, v):
+                    edge = [e[0], e[1]]
+                    # reverse_edge = [e[1], e[0]]
+                    if edge in pair_labels: el.append('pair')
+                    # elif reverse_edge in pair_labels: el.append('pair')
+                    else: el.append('none')
+                edge_labels.append(el)
 
-            # creating graph
-            g = dgl.graph((torch.tensor(u), torch.tensor(v)), num_nodes=len(boxs), idtype=torch.int32)
-            graphs.append(g)
+                # creating graph
+                g = dgl.graph((torch.tensor(u), torch.tensor(v)), num_nodes=len(boxs), idtype=torch.int32)
+                graphs.append(g)
 
             #! DEBUG PURPOSES TO VISUALIZE RANDOM GRAPH IMAGE FROM DATASET
             if False:
@@ -498,5 +500,20 @@ class GraphBuilder():
                     
                     print("Balanced Links: None {} | Key-Value {}".format(num_none, num_pair))
                     img_removed.save(f'esempi/FUNSD/{img_name}_removed_graph.png')
+
+        else:
+            path_preds = '/home/gemelli/projects/doc2graph/src/data/test_bbox'
+            path_images = '/home/gemelli/projects/doc2graph/DATA/FUNSD/testing_data/images'
+            path_gts = '/home/gemelli/projects/doc2graph/DATA/FUNSD/testing_data/adjusted_annotations'
+            all_preds, all_links, all_labels = load_predictions('test', path_preds, path_gts, path_images)
+            print("FUNSD TESTING !!!!!!!!!!!")
+            for f, file in enumerate(tqdm(os.listdir(os.path.join(src, 'adjusted_annotations')), desc='Creating graphs')):
+            
+                img_name = f'{file.split(".")[0]}.jpg'
+                img_path = os.path.join(src, 'images', img_name)
+                features['paths'].append(img_path)
+
+                boxs, texts, nl = all_preds[f], list(), all_labels[f]
+                pair_labels = all_links[f]
 
         return graphs, node_labels, edge_labels, features

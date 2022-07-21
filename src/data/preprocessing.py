@@ -8,11 +8,21 @@ import os
 from PIL import ImageDraw, Image
 import json
 import random
+import pytesseract
+from pytesseract import Output
  
 scale_back = lambda r, w, h: [int(r[0]*w), int(r[1]*h), int(r[2]*w), int(r[3]*h)]
 center = lambda r: ((r[0] + r[2]) / 2, (r[1] + r[3]) / 2)
 
-def match_pred_w_gt(bbox_preds : torch.Tensor, bbox_gts : torch.Tensor):
+def isIn(c, r):
+    if c[0] < r[0] or c[0] > r[2]:
+        return False
+    elif c[1] < r[1] or c[1] > r[3]:
+        return False
+    else:
+        return True
+
+def match_pred_w_gt(bbox_preds : torch.Tensor, bbox_gts : torch.Tensor, links_pair : list):
     bbox_iou = torchvision.ops.box_iou(boxes1=bbox_preds, boxes2=bbox_gts)
     bbox_iou = bbox_iou.numpy()
 
@@ -43,21 +53,36 @@ def match_pred_w_gt(bbox_preds : torch.Tensor, bbox_gts : torch.Tensor):
     false_negative = [idx for idx in range(bbox_gts.shape[0]) if idx not in opt_assignaments.values()]
 
     gt2pred = {v: k for k, v in opt_assignaments.items()}
-    return {"pred2gt": opt_assignaments, "gt2pred": gt2pred, "false_positive": false_positive, "false_negative": false_negative}
+    link_false_neg = []
+    for link in links_pair:
+        if link[0] in false_negative or link[1] in false_negative:
+            link_false_neg.append(link)
+
+    return {"pred2gt": opt_assignaments, "gt2pred": gt2pred, "false_positive": false_positive, "false_negative": false_negative, "n_link_fn": int(len(link_false_neg) / 2)}
 
 def get_objects(path, mode):
     # TODO given a document, apply OCR or Yolo to detect either words or entities.
     return
 
-def load_predictions(name, path_preds, path_gts, path_images):
+def load_predictions(name, path_preds, path_gts, path_images, debug=False):
     # TODO read txt file and pass bounding box to the other function.
     
     boxs_preds = []
     boxs_gts = []
     links_gts = []
+    labels_gts = []
+    texts_ocr = []
     
     for img in os.listdir(path_images):
         w, h = Image.open(os.path.join(path_images, img)).size
+        texts = pytesseract.image_to_data(Image.open(os.path.join(path_images, img)), output_type=Output.DICT)
+        tp = []
+        n_elements = len(texts['level'])
+        for t in range(n_elements):
+            if int(texts['conf'][t]) > 50 and texts['text'][t] != ' ':
+                b = [texts['left'][t], texts['top'][t], texts['left'][t] + texts['width'][t], texts['top'][t] + texts['height'][t]]
+                tp.append([b, texts['text'][t]])
+        texts_ocr.append(tp)
         preds_name = img.split(".")[0] + '.txt'
         with open(os.path.join(path_preds, preds_name), 'r') as preds:
             lines = preds.readlines()
@@ -74,9 +99,11 @@ def load_predictions(name, path_preds, path_gts, path_images):
             boxs = list()
             pair_labels = []
             ids = []
+            labels = []
             for elem in form:
                 boxs.append([float(e) for e in elem['box']])
                 ids.append(elem['id'])
+                labels.append(elem['label'])
                 [pair_labels.append(pair) for pair in elem['linking']]
 
             for p, pair in enumerate(pair_labels):
@@ -84,48 +111,100 @@ def load_predictions(name, path_preds, path_gts, path_images):
 
             boxs_gts.append(boxs)
             links_gts.append(pair_labels)
-
-    random.seed(42)
-    rand_idx = random.randint(0, len(os.listdir(path_images)))
-    img = Image.open(os.path.join(path_images, os.listdir(path_images)[rand_idx])).convert('RGB')
-    draw = ImageDraw.Draw(img)
-
-    # TODO: nodes false positive -> new class 'wrong' (all incident links are 'none')
-    rand_boxs_preds = boxs_preds[rand_idx]
-    rand_boxs_gts = boxs_gts[rand_idx]
-
-    for box in rand_boxs_gts:
-        draw.rectangle(box, outline='blue', width=3)
-    for box in rand_boxs_preds:
-        draw.rectangle(box, outline='red', width=3)
+            labels_gts.append(labels)
     
-    d = match_pred_w_gt(torch.tensor(rand_boxs_preds), torch.tensor(rand_boxs_gts))
-    print(d)
-    for idx in d['pred2gt'].keys():
-        draw.rectangle(rand_boxs_preds[idx], outline='green', width=3)
+    all_links = []
+    all_preds = []
+    all_labels = []
+    all_texts = []
+    for p in range(len(boxs_preds)):
+        d = match_pred_w_gt(torch.tensor(boxs_preds[p]), torch.tensor(boxs_gts[p]), links_gts[p])
+        links = list()
 
-    link_true_pos = list()
-    link_false_neg = list()
-    for link in links_gts[rand_idx]:
-        if link[0] in d['false_negative'] or link[1] in d['false_negative']:
-            link_false_neg.append(link)
-            start = rand_boxs_gts[link[0]]
-            end = rand_boxs_gts[link[1]]
-            draw.line((center(start), center(end)), fill='red', width=3)
-        else:
-            link_true_pos.append(link)
-            start = rand_boxs_preds[d['gt2pred'][link[0]]]
-            end = rand_boxs_preds[d['gt2pred'][link[1]]]
-            draw.line((center(start), center(end)), fill='green', width=3)
+        for link in links_gts[p]:
+            if link[0] in d['false_negative'] or link[1] in d['false_negative']:
+                continue
+            else:
+                links.append([d['gt2pred'][link[0]], d['gt2pred'][link[1]]])
+        all_links.append(links)
 
-    bbox_true_positive = len(d["pred2gt"])
-    precision = bbox_true_positive / (bbox_true_positive + len(d["false_positive"]))
-    recall = bbox_true_positive / (bbox_true_positive + len(d["false_negative"]))
-    f1 = (2 * precision * recall) / (precision + recall)
-    
-    img.save('prova.png')
+        preds = []
+        labels = []
+        texts = []
+        for b, box in enumerate(boxs_preds[p]):
+            if b in d['false_positive']:
+                preds.append(box)
+                labels.append('other')
+            else:
+                gt_id = d['pred2gt'][b]
+                preds.append(box)
+                labels.append(labels_gts[p][gt_id])
+            
+            text = ''
+            for tocr in texts_ocr[p]:
+                if isIn(center(tocr[0]), box):
+                    text += tocr[1] + ' '
 
-    return f1
+            texts.append(text)
+
+        all_preds.append(preds)
+        all_labels.append(labels)
+        all_texts.append(texts)
+
+    if debug:
+        # random.seed(35)
+        # rand_idx = random.randint(0, len(os.listdir(path_images)))
+        print(all_texts[0])
+        rand_idx = 0
+        img = Image.open(os.path.join(path_images, os.listdir(path_images)[rand_idx])).convert('RGB')
+        draw = ImageDraw.Draw(img)
+
+        rand_boxs_preds = boxs_preds[rand_idx]
+        rand_boxs_gts = boxs_gts[rand_idx]
+
+        for box in rand_boxs_gts:
+            draw.rectangle(box, outline='blue', width=3)
+        for box in rand_boxs_preds:
+            draw.rectangle(box, outline='red', width=3)
+        
+        d = match_pred_w_gt(torch.tensor(rand_boxs_preds), torch.tensor(rand_boxs_gts), links_gts[rand_idx])
+        print(d)
+        for idx in d['pred2gt'].keys():
+            draw.rectangle(rand_boxs_preds[idx], outline='green', width=3)
+
+        link_true_pos = list()
+        link_false_neg = list()
+        for link in links_gts[rand_idx]:
+            if link[0] in d['false_negative'] or link[1] in d['false_negative']:
+                link_false_neg.append(link)
+                start = rand_boxs_gts[link[0]]
+                end = rand_boxs_gts[link[1]]
+                draw.line((center(start), center(end)), fill='red', width=3)
+            else:
+                link_true_pos.append(link)
+                start = rand_boxs_preds[d['gt2pred'][link[0]]]
+                end = rand_boxs_preds[d['gt2pred'][link[1]]]
+                draw.line((center(start), center(end)), fill='green', width=3)
+
+        precision = 0
+        recall = 0
+        for idx, gt in enumerate(boxs_gts):
+            d = match_pred_w_gt(torch.tensor(boxs_preds[idx]), torch.tensor(gt), links_gts[rand_idx])
+            bbox_true_positive = len(d["pred2gt"])
+            p = bbox_true_positive / (bbox_true_positive + len(d["false_positive"]))
+            r = bbox_true_positive / (bbox_true_positive + len(d["false_negative"]))
+            # f1 += (2 * p * r) / (p + r)
+            precision += p
+            recall += r
+        
+        precision = precision / len(boxs_gts)
+        recall = recall / len(boxs_gts)
+        f1 = (2 * precision * recall) / (precision + recall)
+        # print(f1, precision, recall)
+
+        img.save('prova.png')
+
+    return all_preds, all_links, all_labels, all_texts
 
 def save_results():
     # TODO output json of matching and check with visualization of images.
@@ -140,4 +219,4 @@ if __name__ == "__main__":
     path_preds = '/home/gemelli/projects/doc2graph/src/data/test_bbox'
     path_images = '/home/gemelli/projects/doc2graph/DATA/FUNSD/testing_data/images'
     path_gts = '/home/gemelli/projects/doc2graph/DATA/FUNSD/testing_data/adjusted_annotations'
-    load_predictions('test', path_preds, path_gts, path_images)
+    load_predictions('test', path_preds, path_gts, path_images, debug=True)

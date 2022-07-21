@@ -180,35 +180,3 @@ def to_bin(dist, angle, b=8):
 
     return torch.cat([torch.tensor(new_dist, dtype=torch.float32), torch.tensor(new_angle, dtype=torch.float32)], dim=1)
 
-def generalized_f1_score(y_true, y_pred, match):
-    # y_true = (y_nodes, y_link)
-    # y_pred = (y_nodes, y_link)
-
-    # nodes
-    micro_f1_nodes, macro_f1_nodes = 0, 0
-    
-    nodes_confusion_mtx = confusion_matrix(y_true=y_true[0][match["pred2gt"].keys()], y_pred=y_pred[0][match["pred2gt"].values()], 
-                                           normalize=None)
-    ntp = [nodes_confusion_mtx[i, i] for i in range(nodes_confusion_mtx.shape[0])]
-    nfp = [(nodes_confusion_mtx[:i, i].sum() + nodes_confusion_mtx[i+1:, i].sum()) for i in range(nodes_confusion_mtx.shape[0])]
-    nfn = [(nodes_confusion_mtx[i, :i].sum() + nodes_confusion_mtx[i, i+1:].sum()) for i in range(nodes_confusion_mtx.shape[0])]
-
-    macro_f1_nodes = np.mean([tp / (tp + (0.5 * (fp + len(match["false_positive"]) + fn + len(match["false_negative"])))) for (tp, fp, fn) in zip(ntp, nfp, nfn)])
-    micro_f1_nodes = np.sum(ntp) / (np.sum(ntp) + (0.5 * (np.sum(nfp) + len(match["false_positive"]) + np.sum(nfn) + len(match["false_negative"]))))
-
-    # links
-    micro_f1_links, macro_f1_links = 0, 0
-
-    links2keep = [idx for idx, link in enumerate(y_true[1]) if (link[0] in match["pred2gt"].values()) and (link[1] in match["pred2gt"].values())]
-    links_confusion_mtx = confusion_matrix(y_true=y_true[1][links2keep], y_pred=y_pred[1][links2keep], normalize=None)
-
-    ltp = [links_confusion_mtx[i, i] for i in range(links_confusion_mtx.shape[0])]
-    lfp = [(links_confusion_mtx[:i, i].sum() + links_confusion_mtx[i+1:, i].sum()) for i in range(links_confusion_mtx.shape[0])]
-    lfn = [(links_confusion_mtx[i, :i].sum() + links_confusion_mtx[i, i+1:].sum()) for i in range(links_confusion_mtx.shape[0])]
-
-    n = len(links2keep) + len(match["false_positive"]) - 1
-    macro_f1_links = np.mean([tp / (tp + (0.5 * (fp + (n * len(match["false_positive"])) + fn + (len(links2keep) * len(match["false_negative"]))))) for (tp, fp, fn) in zip(ltp, lfp, lfn)])
-    micro_f1_links = np.sum(ltp) / (np.sum(ltp) + (0.5 * (np.sum(lfp) + (n * len(match["false_positive"])) + np.sum(lfn) + (len(links2keep) * len(match["false_negative"])))))
-
-    return {"nodes": {"micro_f1": micro_f1_nodes, "macro_f1": macro_f1_nodes}, "links": {"micro_f1": micro_f1_links, "macro_f1": macro_f1_links}}
-
