@@ -1,8 +1,8 @@
 import argparse
+
 from src.data.download import get_data
 from src.training.funsd import train_funsd
-from src.training.naf import train_naf
-from src.amazing_utils import project_tree, set_preprocessing
+from src.utils import project_tree, set_preprocessing
 from src.training.pau import train_pau
 
 def main():
@@ -18,16 +18,14 @@ def main():
     parser.add_argument('--add-embs', '-addT', action="store_true",
                         help="add textual embeddings to nodes")
     parser.add_argument('--add-hist', '-addH', action="store_true",
-                        help="acledd histogram of contents to nodes")
+                        help="add histogram of contents to nodes")
     parser.add_argument('--add-visual', '-addV', action="store_true",
                         help="add visual features to nodes")
     parser.add_argument('--add-eweights', '-addE', action="store_true",
                         help="add edge features to graphs")
-    parser.add_argument('--add-fudge', '-addF', action="store_true",
-                        help="add FUDGE visual features to graphs")
     # data
     parser.add_argument("--src-data", type=str, default='FUNSD',
-                        help="which data source to use. It can be FUNSD, PAU, NAF or CUSTOM")
+                        help="which data source to use. It can be FUNSD, PAU or CUSTOM")
     parser.add_argument("--data-type", type=str, default='img',
                         help="if src-data is CUSTOM, define the data source type: img or pdf.")
     # graphs
@@ -58,13 +56,17 @@ def main():
         set_preprocessing(args)
         if args.src_data == 'FUNSD':
             if args.test and args.weights == None:
-                raise Exception("Provide a weights file relative path! Or train a model first.")
+                raise Exception("Main exception: Provide a weights file relative path! Or train a model first.")
             train_funsd(args)
-        elif args.src_data == 'NAF':
-            train_naf(args)
         elif args.src_data == 'PAU':
             train_pau(args)
-
+        elif args.src_data == 'CUSTOM':
+            #TODO develop custom data preprocessing
+            raise Exception('Main exception: "CUSTOM" source data still under development')
+        else:
+            raise Exception('Main exception: source data invalid. Choose from ["FUNSD", "PAU", "CUSTOM"]')
+    
+    return
 
 if __name__ == '__main__':
     main()

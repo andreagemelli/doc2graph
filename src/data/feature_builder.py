@@ -1,32 +1,25 @@
 import random
+from typing import Tuple
 import spacy
 import torch
 import torchvision
 from tqdm import tqdm
 from PIL import Image, ImageDraw
-import segmentation_models_pytorch as smp
 import torchvision.transforms.functional as tvF
-import numpy as np
-import sys, os
 
-from src.paths import CHECKPOINTS, FUDGE, ROOT
+from src.paths import CHECKPOINTS
 from src.models.unet import Unet
-from src.data.amazing_utils import to_bin, transform_image
-from src.data.amazing_utils import distance, get_histogram
-from src.amazing_utils import get_config
-sys.path.insert(0, os.path.join(ROOT, 'src/models/yolo/yolov5'))
-from src.models.yolo.yolov5.models.common import DetectMultiBackend
-
-# sys.path.append(os.path.join(ROOT,'FUDGE'))
-# from FUDGE.run import detect_boxes
+from src.data.utils import to_bin
+from src.data.utils import polar, get_histogram
+from src.utils import get_config
 
 class FeatureBuilder():
 
-    def __init__(self, d) -> None:
-        """_summary_
+    def __init__(self, d : int):
+        """FeatureBuilder constructor
 
         Args:
-            d (_type_): _description_
+            d (int): device number, if any (cpu or cuda:n)
         """
         self.cfg_preprocessing = get_config('preprocessing')
         self.device = d
@@ -39,30 +32,30 @@ class FeatureBuilder():
 
         if self.add_embs:
             self.text_embedder = spacy.load('en_core_web_lg')
-            # fasttext.util.download_model('en', if_exists='ignore')
-            # self.text_embedder = fasttext.load_model('cc.en.300.bin')
 
         if self.add_visual:
             self.visual_embedder = Unet(encoder_name="mobilenet_v2", encoder_weights=None, in_channels=1, classes=4)
             self.visual_embedder.load_state_dict(torch.load(CHECKPOINTS / 'backbone_unet_new.pth')['weights'])
             self.visual_embedder = self.visual_embedder.encoder
             self.visual_embedder.to(d)
-
-        if self.add_fudge:
-            self.fudge = FUDGE / 'saved/NAF_detect_augR_staggerLighter.pth'
         
         self.sg = lambda rect, s : [rect[0]/s[0], rect[1]/s[1], rect[2]/s[0], rect[3]/s[1]] # scaling by img width and height
     
-    def add_features(self, graphs, features):
+    def add_features(self, graphs : list, features : list) -> Tuple[list, int]:
+        """ Add features to provided graphs
 
-        # rand_id = random.randint(0, len(graphs)-1)
-        # print(features)
+        Args:
+            graphs (list) : list of DGLGraphs
+            features (list) : list of features "sources", like text, positions and images
+        
+        Returns:
+            chunks list and its lenght
+        """
 
-        for id, g in enumerate(tqdm(graphs, desc='adding features:')):
+        for id, g in enumerate(tqdm(graphs, desc='adding features')):
 
             # positional features
             size = Image.open(features['paths'][id]).size
-            # sv = lambda r, f : [r[0]*f[0], r[1]*f[1], r[2]*f[0], r[3]*f[1]]
             feats = [[] for _ in range(len(features['boxs'][id]))]
             geom = [self.sg(box, size) for box in features['boxs'][id]]
             chunks = []
@@ -70,32 +63,29 @@ class FeatureBuilder():
             # 'geometrical' features
             if self.add_geom:
                 
-                #boxs = torch.tensor([scale(box, size) for box in features['boxs'][id]]).to(self.device)
-                #boxs = self.fourier_tf(boxs)
+                # TODO add 2d encoding like "LayoutLM*"
                 [feats[idx].extend(self.sg(box, size)) for idx, box in enumerate(features['boxs'][id])]
-                #[feats[idx].extend(box) for idx, box in enumerate(boxs)]
                 chunks.append(4)
             
+            # HISTOGRAM OF TEXT
             if self.add_hist:
-                # HISTOGRAM OF TEXT
-                # [feats[idx].extend(hist) for idx, hist in enumerate(get_histogram(features['texts'][id]))]
-                g.ndata['hist'] = torch.tensor([hist for hist in get_histogram(features['texts'][id])], dtype=torch.float32)
+                
+                [feats[idx].extend(hist) for idx, hist in enumerate(get_histogram(features['texts'][id]))]
+                chunks.append(4)
             
             # textual features
             if self.add_embs:
+                
                 # LANGUAGE MODEL (SPACY)
                 [feats[idx].extend(self.text_embedder(features['texts'][id][idx]).vector) for idx, _ in enumerate(feats)]
                 chunks.append(len(self.text_embedder(features['texts'][id][0]).vector))
-                # LANGUAGE MODEL (FASTTEXT)
-                # [feats[idx].extend(self.text_embedder.get_sentence_vector(features['texts'][id][idx])) for idx, _ in enumerate(feats)]
-                # chunks.append(len(self.text_embedder.get_sentence_vector(features['texts'][id][0])))
             
             # visual features
+            # https://pytorch.org/vision/stable/generated/torchvision.ops.roi_align.html?highlight=roi
             if self.add_visual:
-                # https://pytorch.org/vision/stable/generated/torchvision.ops.roi_align.html?highlight=roi
                 img = Image.open(features['paths'][id])
                 # img = torchvision.transforms.functional.resize(img, size=(1000, 736))
-                visual_emb = self.visual_embedder(tvF.to_tensor(img).unsqueeze_(0).to(self.device)) # output [batch, canali, dim1, dim2]
+                visual_emb = self.visual_embedder(tvF.to_tensor(img).unsqueeze_(0).to(self.device)) # output [batch, channels, dim1, dim2]
                 # factor = (1024/size[0], 736/size[1]) # (1, 3, 1024, 736)
                 # bboxs = [torch.Tensor(sv(b, factor)) for b in features['boxs'][id]]
                 bboxs = [torch.Tensor(b) for b in features['boxs'][id]]
@@ -103,50 +93,10 @@ class FeatureBuilder():
                 h = [torchvision.ops.roi_align(input=ve, boxes=bboxs, spatial_scale=1/ min(size[1] / ve.shape[2] , size[0] / ve.shape[3]), output_size=1) for ve in visual_emb[1:]]
                 h = torch.cat(h, dim=1)
 
-                # yolo = DetectMultiBackend(CHECKPOINTS / 'best.pt', device=torch.device(self.device), dnn=False, data='/home/gemelli/projects/doc2graph/src/models/yolo/yolov5/data/coco128.yaml', fp16=False)
-                # yolo = torch.nn.Sequential(*yolo.model.model[:10])
-                # transform = torchvision.transforms.Compose([
-                #    torchvision.transforms.PILToTensor()
-                # ])
-                # img = (transform(img).float()).to(self.device)
-                # img = img[None, :, :, :]
-                # yolo_emb = yolo(img)
-                # h = torchvision.ops.roi_align(input=yolo_emb, boxes=bboxs, spatial_scale = 1 / min(1024 / yolo_emb.shape[2] , 736 / yolo_emb.shape[3]), output_size=1)
-
                 # VISUAL FEATURES (RESNET-IMAGENET)
                 [feats[idx].extend(torch.flatten(h[idx]).tolist()) for idx, _ in enumerate(feats)]
                 chunks.append(len(torch.flatten(h[0]).tolist()))
-            
-            # FUDGE visual features
-            if self.add_fudge:
-                # img = features['images'][id]
-                full_path = features['paths'][id]
-                # model = FUDGE / 'saved/NAF_detect_augR_staggerLighter.pth'
-                model = FUDGE / 'saved/FUNSDLines_detect_augR_staggerLighter.pth'
-                img_input = transform_image(full_path)
-
-                _, visual_emb = detect_boxes(
-                    img_input,
-                    img_path = full_path,
-                    output_path=ROOT,
-                    include_threshold= 0.8,
-                    model_checkpoint = model,
-                    device='cuda:0',
-                    detect = False)
-                
-                # visual_emb = torch.tensor(visual_emb).to(self.device)
-                visual_emb = visual_emb.clone().detach().to(self.device)
-                # visual_emb = torch.tensor(visual_emb.clone().detach()).to(self.device)
-                
-                bboxs = [torch.Tensor(b) for b in features['boxs'][id]]
-                bboxs = [torch.stack(bboxs, dim=0).to(self.device)]
-                scale = min(size[1] / visual_emb.shape[2] , size[0] / visual_emb.shape[3])
-                #! output_size set for dimensionality and sapling_ratio at random.
-                h = torchvision.ops.roi_align(input=visual_emb, boxes=bboxs, spatial_scale=1/scale, output_size=1, sampling_ratio=3)
-
-                [feats[idx].extend(torch.flatten(h[idx]).tolist()) for idx, _ in enumerate(feats)]
-                chunks.append(len(torch.flatten(h[0]).tolist()))
-            
+        
             if self.add_eweights:
                 u, v = g.edges()
                 srcs, dsts =  u.tolist(), v.tolist()
@@ -159,7 +109,7 @@ class FeatureBuilder():
                 # parable = lambda x : (-x+1)**4
                 
                 for pair in zip(srcs, dsts):
-                    dist, angle = distance(features['boxs'][id][pair[0]], features['boxs'][id][pair[1]])
+                    dist, angle = polar(features['boxs'][id][pair[0]], features['boxs'][id][pair[1]])
                     distances.append(dist)
                     angles.append(angle)
                 
@@ -210,11 +160,6 @@ class FeatureBuilder():
                     img.save(f'esempi/FUNSD/edges.png')
 
         return chunks, len(chunks)
-    
-    def fourier_tf(self, x):
-        B_gauss = torch.randn((50, 4)).to(self.device) * 10
-        x_proj = (2. * np.pi * x) @ B_gauss.t()
-        return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1).tolist()
     
     def get_info(self):
         print(f"-> textual feats: {self.add_embs}\n-> visual feats: {self.add_visual}\n-> edge feats: {self.add_eweights}")

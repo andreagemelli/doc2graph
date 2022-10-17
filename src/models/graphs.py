@@ -5,8 +5,7 @@ import math
 import torch.nn.functional as F
 
 from src.paths import CFGM
-from src.amazing_utils import get_config
-from dgl.nn.pytorch.conv import GATv2Conv, PNAConv
+from src.utils import get_config
 
 class SetModel():
     def __init__(self, name='gcn', device = 'cpu') -> None:

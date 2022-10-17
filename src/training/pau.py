@@ -2,7 +2,7 @@ from datetime import datetime
 from sklearn.model_selection import KFold, ShuffleSplit
 import torch
 from torch.nn import functional as F
-from random import shuffle, seed
+from random import seed
 from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau
 import dgl 
 from torch.utils.tensorboard import SummaryWriter
@@ -18,8 +18,8 @@ from src.data.dataloader import Document2Graph
 from src.data.preprocessing import match_pred_w_gt
 from src.paths import *
 from src.models.graphs import SetModel
-from src.amazing_utils import get_config
-from src.training.amazing_utils import *
+from src.utils import get_config
+from src.training.utils import *
 
 
 webhook_url = "https://discord.com/api/webhooks/997898000695316581/mIlHnPn95KTOYPS-hQFQFwaEhk0pa82ZR12OMZWZqXWwlH7fHjMZGnCXa03nvO_4cMzw"
@@ -185,6 +185,10 @@ def train_pau(args):
     edges_f1 = []
     test_graph = dgl.batch(test_data.graphs).to(device)
 
+    all_precisions = []
+    all_recalls = []
+    all_f1 = []
+
     for m in models:
         model.load_state_dict(torch.load(CHECKPOINTS / m))
         model.eval()
@@ -192,16 +196,96 @@ def train_pau(args):
 
             n, e = model(test_graph, test_graph.ndata['feat'].to(device))
             auc = compute_auc_mc(e.to(device), test_graph.edata['label'].to(device))
-            _, preds = torch.max(F.softmax(e, dim=1), dim=1)
+            _, epreds = torch.max(F.softmax(e, dim=1), dim=1)
+            _, npreds = torch.max(F.softmax(n, dim=1), dim=1)
 
-            accuracy, f1 = get_binary_accuracy_and_f1(preds, test_graph.edata['label'])
-            _, classes_f1 = get_binary_accuracy_and_f1(preds, test_graph.edata['label'], per_class=True)
+            accuracy, f1 = get_binary_accuracy_and_f1(epreds, test_graph.edata['label'])
+            _, classes_f1 = get_binary_accuracy_and_f1(epreds, test_graph.edata['label'], per_class=True)
             edges_f1.append(classes_f1[1])
 
             macro, micro = get_f1(n, test_graph.ndata['label'].to(device))
             nodes_micro.append(micro)
             if micro >= max(nodes_micro):
                 best_model = m
+
+            test_graph.edata['preds'] = epreds
+            test_graph.ndata['preds'] = npreds
+            t_f1 = 0
+            t_precision = 0
+            t_recall = 0
+            no_table = 0
+            tables = 0
+            
+            for g, graph in enumerate(dgl.unbatch(test_graph)):
+                etargets = graph.edata['preds']
+                ntargets = graph.ndata['preds']
+                kvp_ids = etargets.nonzero().flatten().tolist()
+
+                table_g = dgl.edge_subgraph(graph, torch.tensor(kvp_ids, dtype=torch.int32).to(device))
+                table_nodes = table_g.ndata['geom']
+                try:
+                    table_topleft, _ = torch.min(table_nodes, 0)
+                    table_bottomright, _ = torch.max(table_nodes, 0)
+                    table = torch.cat([table_topleft[:2], table_bottomright[2:]], 0)
+                except:
+                    table = None
+                
+                img_path = test_data.paths[g]
+                w, h = Image.open(img_path).size
+                gt_path = img_path.split(".")[0]
+
+                root = ET.parse(gt_path + '_gt.xml').getroot()
+                regions = []
+                for parent in root:
+                    if parent.tag.split("}")[1] == 'Page':
+                        for child in parent:
+                            # print(file_gt)
+                            region_label = child[0].attrib['value']
+                            if region_label != 'positions': continue
+                            region_bbox = [int(child[1].attrib['points'].split(" ")[0].split(",")[0].split(".")[0]),
+                                        int(child[1].attrib['points'].split(" ")[1].split(",")[1].split(".")[0]),
+                                        int(child[1].attrib['points'].split(" ")[2].split(",")[0].split(".")[0]),
+                                        int(child[1].attrib['points'].split(" ")[3].split(",")[1].split(".")[0])]
+                            regions.append([region_label, region_bbox])
+
+                table_regions = [region[1] for region in regions if region[0]=='positions']
+                if table is None and len(table_regions) !=0: 
+                    t_f1 += 0
+                    t_precision += 0
+                    t_recall += 0
+                    tables += len(table_regions)
+                elif table is None and len(table_regions) == 0:
+                    no_table -= 1
+                    continue
+                elif table is not None and len(table_regions) ==0:
+                    t_f1 += 0
+                    t_precision += 0
+                    t_recall += 0
+                    no_table -= 1
+                else:
+                    table = [[t[0]*w, t[1]*h, t[2]*w, t[3]*h] for t in [table.flatten().tolist()]][0]
+                    # d = match_pred_w_gt(torch.tensor(boxs_preds[idx]), torch.tensor(gt))
+                    d = match_pred_w_gt(torch.tensor(table).view(-1, 4), torch.tensor(table_regions).view(-1, 4), [])
+                    bbox_true_positive = len(d["pred2gt"])
+                    p = bbox_true_positive / (bbox_true_positive + len(d["false_positive"]))
+                    r = bbox_true_positive / (bbox_true_positive + len(d["false_negative"]))
+                    try:
+                        t_f1 += (2 * p * r) / (p + r)
+                    except:
+                        t_f1 += 0
+                    t_precision += p
+                    t_recall += r
+                    tables += len(table_regions)
+
+                    test_data.print_graph(num=g, node_labels = None, labels_ids=None, name=f'test_{g}', bidirect=False, regions=regions, preds=table)
+
+            # test_data.print_graph(num=g, name=f'test_labels_{g}')
+            t_recall = t_recall / (tables + no_table)
+            t_precision = t_precision / (tables + no_table)
+            t_f1 = (2 * t_precision * t_recall) / (t_precision + t_recall)
+            all_precisions.append(t_precision)
+            all_recalls.append(t_recall)
+            all_f1.append(t_f1)
 
         ################* STEP 4: RESULTS ################
         print("\n### RESULTS ###")
@@ -211,6 +295,9 @@ def train_pau(args):
         print("F1 Edges: None {:.4f} - Table {:.4f}".format(classes_f1[0], classes_f1[1]))
         print("F1 Nodes: Macro {:.4f} - Micro {:.4f}".format(macro, micro))
     
+    print("TABLE DETECTION PRECISION [MAX, MEAN, STD]:", max(all_precisions), mean(all_precisions), np.std(all_precisions))
+    print("TABLE DETECTION RECALLS [MAX, MEAN, STD]:", max(all_recalls), mean(all_recalls), np.std(all_recalls))
+    print("TABLE DETECTION F1s [MAX, MEAN, STD]:", max(all_f1), mean(all_f1), np.std(all_f1))
     print(f"\nLoading best model {best_model}")
     model.load_state_dict(torch.load(CHECKPOINTS / best_model))
     model.eval()
@@ -283,7 +370,7 @@ def train_pau(args):
         else:
             table = [[t[0]*w, t[1]*h, t[2]*w, t[3]*h] for t in [table.flatten().tolist()]][0]
             # d = match_pred_w_gt(torch.tensor(boxs_preds[idx]), torch.tensor(gt))
-            d = match_pred_w_gt(torch.tensor(table).view(-1, 4), torch.tensor(table_regions).view(-1, 4))
+            d = match_pred_w_gt(torch.tensor(table).view(-1, 4), torch.tensor(table_regions).view(-1, 4), [])
             bbox_true_positive = len(d["pred2gt"])
             p = bbox_true_positive / (bbox_true_positive + len(d["false_positive"]))
             r = bbox_true_positive / (bbox_true_positive + len(d["false_negative"]))
@@ -309,8 +396,7 @@ def train_pau(args):
         results = {'MODEL': {
             'name': sm.get_name(),
             'weights': best_model,
-            'net-params': sm.get_total_params(), 
-            'num-layers': model.num_layers,
+            'net-params': sm.get_total_params(),
             'projector-output': model.out_chunks,
             'dropout': model.dropout,
             'lastFC': model.hidden_dim
@@ -331,14 +417,19 @@ def train_pau(args):
                 'nodes-f1': [macro, micro],
                 'std-pairs': np.std(nodes_micro),
                 'mean-pairs': mean(nodes_micro),
-                'table-detection': [t_precision / (tables + no_table), t_recall / (tables + no_table), t_f1 / (tables + no_table)]
+                'table-detection-precision': [max(all_precisions), mean(all_precisions), np.std(all_precisions)],
+                'table-detection-recall': [max(all_recalls), mean(all_recalls), np.std(all_recalls)],
+                'table-detection-f1': [max(all_f1), mean(all_f1), np.std(all_f1)]
             }}
         save_test_results(train_name, results)
+        print("TABLE DETECTION PRECISION [MAX, MEAN, STD]:", max(all_precisions), mean(all_precisions), np.std(all_precisions))
+        print("TABLE DETECTION RECALLS [MAX, MEAN, STD]:", max(all_recalls), mean(all_recalls), np.std(all_recalls))
+        print("TABLE DETECTION F1s [MAX, MEAN, STD]:", max(all_f1), mean(all_f1), np.std(all_f1))
     
     print("END TRAINING:", time.time() - start_training)
     return {'best_model': best_model, 'Nodes-F1': {'max': max(nodes_micro), 'mean': mean(nodes_micro), 'std': np.std(nodes_micro)}, 
             'Edges-F1': {'max': max(edges_f1), 'mean': mean(edges_f1), 'std': np.std(edges_f1)}, 
-            'Table Detection': {'precision': t_precision / (tables + no_table), 'recall': t_recall / (tables + no_table), 'f1': t_f1 / (tables + no_table)}}
+            'Table Detection': {'precision': [max(all_precisions), mean(all_precisions), np.std(all_precisions)], 'recall': [max(all_recalls), mean(all_recalls), np.std(all_recalls)], 'f1': [max(all_f1), mean(all_f1), np.std(all_f1)]}}
     # # TODO: FIX and CHECK
     # pairs_ids = preds.nonzero().flatten().tolist()
     # u, v = test_graph.edges()

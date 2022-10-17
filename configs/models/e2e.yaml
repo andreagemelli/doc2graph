@@ -1,0 +1,5 @@
+name: E2E
+dropout: 0.2
+hidden_dim: 300
+out_chunks: 300
+doProject: True

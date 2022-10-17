@@ -17,8 +17,9 @@ from src.data.dataloader import Document2Graph
 from src.data.preprocessing import match_pred_w_gt
 from src.paths import *
 from src.models.graphs import SetModel
-from src.amazing_utils import get_config
-from src.training.amazing_utils import *
+from src.utils import get_config
+from src.training.utils import *
+from src.data.graph_builder import GraphBuilder
 
 def entity_labeling(args):
 
@@ -631,34 +632,82 @@ def e2e(args):
         _, classes_f1 = get_binary_accuracy_and_f1(epreds, test_graph.edata['label'], per_class=True)
         macro, micro = get_f1(n, test_graph.ndata['label'].to(device))
     
-    ##### FARLOCCCOOOOOO #######
+    ##### DETECTIONS METRICS #######
 
-    farlocco = dgl.unbatch(test_graph)[0]
+    # det_micro_f1, det_pairs_f1 = [], []
+    # for far, farlocco in enumerate(dgl.unbatch(test_graph)):
+    #     w, h = Image.open(test_data.paths[far]).size
+    #     scale = lambda r : [r[0]*w, r[1]*h, r[2]*w, r[3]*h]
 
-    links_gts = []
-    gts_name = test_data.paths[0].split(".")[0].split("/")[-1] + '.json'
-    with open(os.path.join(FUNSD_TEST, 'adjusted_annotations', gts_name), 'r') as f:
-        form = json.load(f)['form']
-        pair_labels = []
-        ids = []
-        for elem in form:
-            ids.append(elem['id'])
-            [pair_labels.append(pair) for pair in elem['linking']]
+    #     edge_labels = []
+    #     boxs_gts = []
+    #     labels_gts = []
+    #     gts_name = test_data.paths[far].split(".")[0].split("/")[-1] + '.json'
+    #     all_ntp = [0, 0, 0, 0]
+    #     all_nfp = [0, 0, 0, 0]
+    #     all_nfn = [0, 0, 0, 0]
+    #     all_link_ltp = [0, 0]
+    #     all_link_lfp = [0, 0]
+    #     all_link_lfn = [0, 0]
+    #     num_false_positive, num_false_negative, num_link_fn = 0, 0, 0
+    #     with open(os.path.join(FUNSD_TEST, 'adjusted_annotations', gts_name), 'r') as f:
+    #         form = json.load(f)['form']
+    #         pair_labels = []
+    #         ids = []
+    #         for elem in form:
+    #             boxs_gts.append(elem['box'])
+    #             labels_gts.append(elem['label'])
+    #             ids.append(elem['id'])
+    #             [pair_labels.append(pair) for pair in elem['linking']]
 
-        for p, pair in enumerate(pair_labels):
-            pair_labels[p] = [ids.index(pair[0]), ids.index(pair[1])]
+    #         for p, pair in enumerate(pair_labels):
+    #             pair_labels[p] = [ids.index(pair[0]), ids.index(pair[1])]
+            
+    #         # u, v = GraphBuilder().fully_connected(range(len(boxs_gts)))
+            
+    #         # el = list()
+    #         # for e in zip(u, v):
+    #         #     edge = [e[0], e[1]]
+    #         #     # reverse_edge = [e[1], e[0]]
+    #         #     if edge in pair_labels: el.append('pair')
+    #         #     # elif reverse_edge in pair_labels: el.append('pair')
+    #         #     else: el.append('none')
+    #         # edge_labels.append(el)
+    #     bbox_preds = [scale(g) for g in farlocco.ndata['geom'].tolist()]
+    #     d = match_pred_w_gt(torch.tensor(bbox_preds).cpu(), torch.tensor(boxs_gts).cpu(), pair_labels)
 
-        links_gts.append(pair_labels)
+    #     #labels_gts = torch.tensor([np.where(target == test_data.node_unique_labels)[0][0] for target in labels_gts], dtype=torch.int64)
+    #     #edge_labels = torch.tensor([np.where(target == test_data.edge_unique_labels)[0][0] for target in edge_labels[0]], dtype=torch.int64)
+    #     ntp, nfp, nfn, ltp, lfp, lfn, enrico = generalized_f1_score(y_true=(farlocco.ndata['label'].detach().cpu().numpy(), farlocco.edata['label'].detach().cpu().numpy()), 
+    #                                 y_pred=(farlocco.ndata['preds'].detach().cpu().numpy(), farlocco.edata['preds'].detach().cpu().numpy()), 
+    #                                 match=d)
 
-    d = match_pred_w_gt(torch.tensor(farlocco.ndata['geom']).cpu(), torch.tensor(farlocco.ndata['geom']).cpu(), links_gts)
+    #     num_false_positive += len(d['false_positive'])
+    #     num_false_negative += len(d['false_negative'])
+    #     num_link_fn +=  d["n_link_fn"]
+         
+    #     for idx, (tp, fp, fn) in enumerate(zip(ntp, nfp, nfn)):
+    #         all_ntp[idx] += tp
+    #         all_nfp[idx] += fp
+    #         all_nfn[idx] += fn
+    #     print(all_ntp[0], all_ntp[1],  all_ntp[2], all_ntp[3])
+    #     # input()
+        
+    #     for idx, (tp, fp, fn) in enumerate(zip(ltp, lfp, lfn)):
+    #         all_link_ltp[idx] += tp
+    #         all_link_lfp[idx] += fp
+    #         all_link_lfn[idx] += fn
+        
+    #     micro_f1, pairs_f1 = enrico["nodes"]["micro_f1"], enrico["pairs_f1"]
+    #     det_micro_f1.append(micro_f1)
+    #     if pairs_f1 is not None: det_pairs_f1.append(pairs_f1)
+    #     # _, farlocco_f1 = get_binary_accuracy_and_f1(farlocco.edata['preds'], farlocco.edata['label'], per_class=True)
+    #     # _, farlocco_micro = get_f1(farlocco.ndata['net'], farlocco.ndata['label'].to(device))
 
-    enrico = generalized_f1_score(y_true=(farlocco.ndata['label'].detach().cpu().numpy(), farlocco.edata['label'].detach().cpu().numpy()), 
-                                  y_pred=(farlocco.ndata['preds'].detach().cpu().numpy(), farlocco.edata['preds'].detach().cpu().numpy()), 
-                                  match=d)
-    _, farlocco_f1 = get_binary_accuracy_and_f1(farlocco.edata['preds'], farlocco.edata['label'], per_class=True)
-    _, farlocco_micro = get_f1(farlocco.ndata['net'], farlocco.ndata['label'].to(device))
-
-    ###########################
+    # micro_f1_nodes = np.sum(all_ntp) / (np.sum(all_ntp) + (0.5 * (np.sum(all_nfp) + num_false_positive + np.sum(nfn) + num_false_negative)))
+    # f1_pairs = [tp / (tp + (0.5 * (fp + fn + num_link_fn))) for (tp, fp, fn) in zip(all_link_ltp, all_link_lfp, all_link_lfn)][1]
+    # print(micro_f1_nodes, f1_pairs)
+    # ###########################
 
     # ################* STEP 4: RESULTS ################
     print("\n### RESULTS POST-PROCESSING###")
@@ -701,14 +750,14 @@ def e2e(args):
         save_test_results(train_name, results)
     
     print("END TRAINING:", time.time() - start_training)
-    return {'ENRICO': enrico, 'falrocco_f1': farlocco_f1, 'farlocco_micro': farlocco_micro}
+    #return {'micro_f1': [mean(det_micro_f1), np.std(det_micro_f1)], 'pairs_f1': [mean(det_pairs_f1), np.std(det_pairs_f1)]}
+    return {'LINKS [MAX, MEAN, STD]': [classes_f1[1], mean(edges_f1), np.std(edges_f1)], 'NODES [MAX, MEAN, STD]': [micro, mean(nodes_micro), np.std(nodes_micro)]}
 
 def train_funsd(args):
 
     if args.task == 'elab':
         entity_labeling(args)
     elif args.task == 'elin':
-        # entity_linking(args)
         entity_linking(args)
     elif args.task == 'e2e':
         e2e(args)

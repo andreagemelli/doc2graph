@@ -1,8 +1,8 @@
 import os
-from src.paths import DATA
 import requests
 import zipfile
-from git import Repo
+
+from src.paths import DATA
 
 def download_url(url, save_path, chunk_size=128):
     r = requests.get(url, stream=True)
@@ -20,14 +20,11 @@ def funsd():
     os.rename(DATA / 'dataset', DATA / 'FUNSD')
     return
 
-def naf():
-    print("Downloading NAF")
-    Repo.clone_from("https://github.com/herobd/NAF_dataset.git", DATA / 'NAF')
-    dlz = DATA / 'NAF' / "labeled_images.tar.gz"
-    download_url("https://github.com/herobd/NAF_dataset/releases/download/v1.0/labeled_images.tar.gz", dlz)
-    os.system(f'cd {DATA}/NAF && ./move_images.sh')
+def pau():
+    #TODO dev data loader for Pau Riba's dataset
+    print('Download  file: PAU Riba\'s dataset function download under dev.')
 
 def get_data():
     funsd()
-    naf()
+    pau()
     return

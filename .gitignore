@@ -8,7 +8,9 @@ build
 cc.*
 
 #user-defined
-DATA
+DATA/FUNSD/testing_data
+DATA/FUNSD/training_data
+DATA/PAU
 _old
 *.env
 outputs
@@ -17,3 +19,4 @@ configs/preprocessing.yaml
 esempi
 examples
 fastText
+src/models/yolo

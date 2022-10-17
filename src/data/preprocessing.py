@@ -1,18 +1,22 @@
-from nis import match
-from langcodes import best_match
 import torch
 import torchvision
 import numpy as np
 from scipy.optimize import linprog
-import os 
+import os
 from PIL import ImageDraw, Image
 import json
-import random
 import pytesseract
 from pytesseract import Output
- 
-scale_back = lambda r, w, h: [int(r[0]*w), int(r[1]*h), int(r[2]*w), int(r[3]*h)]
-center = lambda r: ((r[0] + r[2]) / 2, (r[1] + r[3]) / 2)
+
+from src.paths import DATA, FUNSD_TEST
+
+
+def scale_back(r, w, h): return [int(r[0]*w),
+                                 int(r[1]*h), int(r[2]*w), int(r[3]*h)]
+
+
+def center(r): return ((r[0] + r[2]) / 2, (r[1] + r[3]) / 2)
+
 
 def isIn(c, r):
     if c[0] < r[0] or c[0] > r[2]:
@@ -22,11 +26,13 @@ def isIn(c, r):
     else:
         return True
 
-def match_pred_w_gt(bbox_preds : torch.Tensor, bbox_gts : torch.Tensor, links_pair : list):
+
+def match_pred_w_gt(bbox_preds: torch.Tensor, bbox_gts: torch.Tensor, links_pair: list):
     bbox_iou = torchvision.ops.box_iou(boxes1=bbox_preds, boxes2=bbox_gts)
     bbox_iou = bbox_iou.numpy()
 
-    A_ub = np.zeros(shape=(bbox_iou.shape[0] + bbox_iou.shape[1], bbox_iou.shape[0] * bbox_iou.shape[1]))
+    A_ub = np.zeros(shape=(
+        bbox_iou.shape[0] + bbox_iou.shape[1], bbox_iou.shape[0] * bbox_iou.shape[1]))
     for r in range(bbox_iou.shape[0]):
         st = r * bbox_iou.shape[1]
         A_ub[r, st:st + bbox_iou.shape[1]] = 1
@@ -35,7 +41,9 @@ def match_pred_w_gt(bbox_preds : torch.Tensor, bbox_gts : torch.Tensor, links_pa
         A_ub[r, j::bbox_iou.shape[1]] = 1
     b_ub = np.ones(shape=A_ub.shape[0])
 
-    assignaments_score = linprog(c=-bbox_iou.reshape(-1), A_ub=A_ub, b_ub=b_ub, bounds=(0, 1), method="highs-ds")
+    assignaments_score = linprog(
+        c=-bbox_iou.reshape(-1), A_ub=A_ub, b_ub=b_ub, bounds=(0, 1), method="highs-ds")
+    #assignaments_score = linprog(c=-bbox_iou.reshape(-1), bounds=(0, 1), method="highs-ds")
     # print(assignaments_score)
     if not assignaments_score.success:
         print("Optimization FAILED")
@@ -46,11 +54,13 @@ def match_pred_w_gt(bbox_preds : torch.Tensor, bbox_gts : torch.Tensor, links_pa
     opt_assignaments = {}
     for idx in range(assignaments_score.shape[0]):
         if (bbox_iou[idx, assignaments_ids[idx]] > 0.5) and (assignaments_score[idx, assignaments_ids[idx]] > 0.9):
-            opt_assignaments[idx] = assignaments_ids[idx] 
+            opt_assignaments[idx] = assignaments_ids[idx]
     # unmatched predictions
-    false_positive = [idx for idx in range(bbox_preds.shape[0]) if idx not in opt_assignaments]
+    false_positive = [idx for idx in range(
+        bbox_preds.shape[0]) if idx not in opt_assignaments]
     # unmatched gts
-    false_negative = [idx for idx in range(bbox_gts.shape[0]) if idx not in opt_assignaments.values()]
+    false_negative = [idx for idx in range(
+        bbox_gts.shape[0]) if idx not in opt_assignaments.values()]
 
     gt2pred = {v: k for k, v in opt_assignaments.items()}
     link_false_neg = []
@@ -58,29 +68,39 @@ def match_pred_w_gt(bbox_preds : torch.Tensor, bbox_gts : torch.Tensor, links_pa
         if link[0] in false_negative or link[1] in false_negative:
             link_false_neg.append(link)
 
-    return {"pred2gt": opt_assignaments, "gt2pred": gt2pred, "false_positive": false_positive, "false_negative": false_negative, "n_link_fn": int(len(link_false_neg) / 2)}
+    if len(links_pair) != 0:
+        rate = len(link_false_neg) / len(links_pair)
+    else:
+        rate = 0
+    return {"pred2gt": opt_assignaments, "gt2pred": gt2pred, "false_positive": false_positive, "false_negative": false_negative, "n_link_fn": int(len(link_false_neg) / 2), "link_loss": rate, "entity_loss": len(false_positive) / (len(false_positive) + len(opt_assignaments.keys()))}
+
 
 def get_objects(path, mode):
     # TODO given a document, apply OCR or Yolo to detect either words or entities.
     return
 
+
 def load_predictions(name, path_preds, path_gts, path_images, debug=False):
     # TODO read txt file and pass bounding box to the other function.
-    
+
     boxs_preds = []
     boxs_gts = []
     links_gts = []
     labels_gts = []
     texts_ocr = []
-    
+    all_paths = []
+
     for img in os.listdir(path_images):
+        all_paths.append(os.path.join(path_images, img))
         w, h = Image.open(os.path.join(path_images, img)).size
-        texts = pytesseract.image_to_data(Image.open(os.path.join(path_images, img)), output_type=Output.DICT)
+        texts = pytesseract.image_to_data(Image.open(
+            os.path.join(path_images, img)), output_type=Output.DICT)
         tp = []
         n_elements = len(texts['level'])
         for t in range(n_elements):
             if int(texts['conf'][t]) > 50 and texts['text'][t] != ' ':
-                b = [texts['left'][t], texts['top'][t], texts['left'][t] + texts['width'][t], texts['top'][t] + texts['height'][t]]
+                b = [texts['left'][t], texts['top'][t], texts['left'][t] +
+                     texts['width'][t], texts['top'][t] + texts['height'][t]]
                 tp.append([b, texts['text'][t]])
         texts_ocr.append(tp)
         preds_name = img.split(".")[0] + '.txt'
@@ -88,9 +108,11 @@ def load_predictions(name, path_preds, path_gts, path_images, debug=False):
             lines = preds.readlines()
             boxs = list()
             for line in lines:
-                scaled = scale_back([float(c) for c in line[:-1].split(" ")[1:]], w, h)
+                scaled = scale_back([float(c)
+                                    for c in line[:-1].split(" ")[1:]], w, h)
                 sw, sh = scaled[2] / 2, scaled[3] / 2
-                boxs.append([scaled[0] - sw, scaled[1] - sh, scaled[0] + sw, scaled[1] + sh])
+                boxs.append([scaled[0] - sw, scaled[1] - sh,
+                            scaled[0] + sw, scaled[1] + sh])
             boxs_preds.append(boxs)
 
         gts_name = img.split(".")[0] + '.json'
@@ -112,13 +134,19 @@ def load_predictions(name, path_preds, path_gts, path_images, debug=False):
             boxs_gts.append(boxs)
             links_gts.append(pair_labels)
             labels_gts.append(labels)
-    
+
     all_links = []
     all_preds = []
     all_labels = []
     all_texts = []
+    dropped_links = 0
+    dropped_entity = 0
+
     for p in range(len(boxs_preds)):
-        d = match_pred_w_gt(torch.tensor(boxs_preds[p]), torch.tensor(boxs_gts[p]), links_gts[p])
+        d = match_pred_w_gt(torch.tensor(
+            boxs_preds[p]), torch.tensor(boxs_gts[p]), links_gts[p])
+        dropped_links += d['link_loss']
+        dropped_entity += d['entity_loss']
         links = list()
 
         for link in links_gts[p]:
@@ -139,7 +167,7 @@ def load_predictions(name, path_preds, path_gts, path_images, debug=False):
                 gt_id = d['pred2gt'][b]
                 preds.append(box)
                 labels.append(labels_gts[p][gt_id])
-            
+
             text = ''
             for tocr in texts_ocr[p]:
                 if isIn(center(tocr[0]), box):
@@ -150,13 +178,15 @@ def load_predictions(name, path_preds, path_gts, path_images, debug=False):
         all_preds.append(preds)
         all_labels.append(labels)
         all_texts.append(texts)
+    print(dropped_links / len(boxs_preds), dropped_entity / len(boxs_preds))
 
     if debug:
         # random.seed(35)
         # rand_idx = random.randint(0, len(os.listdir(path_images)))
         print(all_texts[0])
         rand_idx = 0
-        img = Image.open(os.path.join(path_images, os.listdir(path_images)[rand_idx])).convert('RGB')
+        img = Image.open(os.path.join(path_images, os.listdir(
+            path_images)[rand_idx])).convert('RGB')
         draw = ImageDraw.Draw(img)
 
         rand_boxs_preds = boxs_preds[rand_idx]
@@ -166,8 +196,9 @@ def load_predictions(name, path_preds, path_gts, path_images, debug=False):
             draw.rectangle(box, outline='blue', width=3)
         for box in rand_boxs_preds:
             draw.rectangle(box, outline='red', width=3)
-        
-        d = match_pred_w_gt(torch.tensor(rand_boxs_preds), torch.tensor(rand_boxs_gts), links_gts[rand_idx])
+
+        d = match_pred_w_gt(torch.tensor(rand_boxs_preds),
+                            torch.tensor(rand_boxs_gts), links_gts[rand_idx])
         print(d)
         for idx in d['pred2gt'].keys():
             draw.rectangle(rand_boxs_preds[idx], outline='green', width=3)
@@ -189,14 +220,17 @@ def load_predictions(name, path_preds, path_gts, path_images, debug=False):
         precision = 0
         recall = 0
         for idx, gt in enumerate(boxs_gts):
-            d = match_pred_w_gt(torch.tensor(boxs_preds[idx]), torch.tensor(gt), links_gts[rand_idx])
+            d = match_pred_w_gt(torch.tensor(
+                boxs_preds[idx]), torch.tensor(gt), links_gts[rand_idx])
             bbox_true_positive = len(d["pred2gt"])
-            p = bbox_true_positive / (bbox_true_positive + len(d["false_positive"]))
-            r = bbox_true_positive / (bbox_true_positive + len(d["false_negative"]))
+            p = bbox_true_positive / \
+                (bbox_true_positive + len(d["false_positive"]))
+            r = bbox_true_positive / \
+                (bbox_true_positive + len(d["false_negative"]))
             # f1 += (2 * p * r) / (p + r)
             precision += p
             recall += r
-        
+
         precision = precision / len(boxs_gts)
         recall = recall / len(boxs_gts)
         f1 = (2 * precision * recall) / (precision + recall)
@@ -204,7 +238,8 @@ def load_predictions(name, path_preds, path_gts, path_images, debug=False):
 
         img.save('prova.png')
 
-    return all_preds, all_links, all_labels, all_texts
+    return all_paths, all_preds, all_links, all_labels, all_texts
+
 
 def save_results():
     # TODO output json of matching and check with visualization of images.
@@ -216,7 +251,7 @@ if __name__ == "__main__":
     # bbox_preds = torch.Tensor([[1, 1, 4, 4], [5, 5, 7, 7], [15, 15, 20, 20], [2, 2, 4, 4]])
 
     # print(match_pred_w_gt(bbox_preds, bbox_gts))
-    path_preds = '/home/gemelli/projects/doc2graph/src/data/test_bbox'
-    path_images = '/home/gemelli/projects/doc2graph/DATA/FUNSD/testing_data/images'
-    path_gts = '/home/gemelli/projects/doc2graph/DATA/FUNSD/testing_data/adjusted_annotations'
+    path_preds = DATA / 'FUNSD' / 'test_bbox'
+    path_images = FUNSD_TEST / 'images'
+    path_gts = FUNSD_TEST / 'adjusted_annotations'
     load_predictions('test', path_preds, path_gts, path_images, debug=True)

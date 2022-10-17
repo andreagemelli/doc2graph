@@ -29,12 +29,3 @@ FUNSD_TEST = DATA / 'FUNSD' / 'testing_data'
 # PAU
 PAU_TRAIN = DATA / 'PAU' / 'train'
 PAU_TEST = DATA / 'PAU' / 'test'
-
-# NAF
-NAF = DATA / 'NAF'
-SIMPLE_NAF_TRAIN = NAF / 'simple' / 'train'
-SIMPLE_NAF_VALID = NAF / 'simple' / 'valid'
-SIMPLE_NAF_TEST = NAF / 'simple' / 'test'
-
-# FUDGE
-FUDGE = ROOT / 'FUDGE'
