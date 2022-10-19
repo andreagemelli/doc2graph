@@ -5,8 +5,10 @@ FEATURES:
   add_geom: true
   add_hist: false
   add_visual: true
+  num_polar_bins: 8
 GRAPHS:
   data_type: img
-  edge_type: fully
+  edge_type: knn
+  node_granularity: gt
 LOADER:
-  src_data: FUNSD
+  src_data: PAU

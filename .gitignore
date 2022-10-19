@@ -8,9 +8,7 @@ build
 cc.*
 
 #user-defined
-DATA/FUNSD/testing_data
-DATA/FUNSD/training_data
-DATA/PAU
+DATA
 _old
 *.env
 outputs
@@ -18,5 +16,5 @@ FUDGE
 configs/preprocessing.yaml
 esempi
 examples
-fastText
-src/models/yolo
+src/models/yolov5
+src/models/checkpoints

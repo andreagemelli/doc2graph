@@ -134,10 +134,10 @@ def to_bin(dist :int, angle : int, b=8) -> torch.Tensor:
     Args:
         dist (int): distance in terms of pixel, given by "polar()" util function
         angle (int): angle between 0 and 360, given by "polar()" util function
-        b (int): number of bins, power of 2
+        b (int): number of bins, MUST be power of 2
     
     Returns:
-        torch.Tensor: new distance and angle
+        torch.Tensor: new distance and angle (binary encoded)
 
     """
     def isPowerOfTwo(x):

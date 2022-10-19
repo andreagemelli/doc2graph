@@ -21,6 +21,7 @@ class GraphBuilder():
         self.cfg_preprocessing = get_config('preprocessing')
         self.edge_type = self.cfg_preprocessing.GRAPHS.edge_type
         self.data_type = self.cfg_preprocessing.GRAPHS.data_type
+        self.node_granularity = self.cfg_preprocessing.GRAPHS.node_granularity
         random.seed = 42
         return
     
@@ -292,10 +293,9 @@ class GraphBuilder():
         graphs, node_labels, edge_labels = list(), list(), list()
         features = {'paths': [], 'texts': [], 'boxs': []}
         # justOne = random.choice(os.listdir(os.path.join(src, 'adjusted_annotations'))).split(".")[0]
-        test = str(src).split("/")[-1] == 'testing_data'
-        test = False
-        if not test:
-            for file in tqdm(os.listdir(os.path.join(src, 'adjusted_annotations')), desc='Creating graphs'):
+        
+        if self.node_granularity == 'gt':
+            for file in tqdm(os.listdir(os.path.join(src, 'adjusted_annotations')), desc='Creating graphs - GT'):
             
                 img_name = f'{file.split(".")[0]}.jpg'
                 img_path = os.path.join(src, 'images', img_name)
@@ -391,13 +391,12 @@ class GraphBuilder():
                     print("Balanced Links: None {} | Key-Value {}".format(num_none, num_pair))
                     img_removed.save(f'esempi/FUNSD/{img_name}_removed_graph.png')
 
-        else:
-            path_preds = DATA / 'FUNSD' / 'test_bbox'
-            path_images = FUNSD_TEST / 'images'
-            path_gts = FUNSD_TEST / 'adjusted_annotations'
-            all_paths, all_preds, all_links, all_labels, all_texts = load_predictions('test', path_preds, path_gts, path_images, debug=True)
-            print("-> FUNSD TESTING")
-            for f, img_path in enumerate(tqdm(all_paths, desc='Creating graphs')):
+        elif self.node_granularity == 'yolo':
+            path_preds = os.path.join(src, 'yolo_bbox')
+            path_images = os.path.join(src, 'images')
+            path_gts = os.path.join(src, 'adjusted_annotations')
+            all_paths, all_preds, all_links, all_labels, all_texts = load_predictions(path_preds, path_gts, path_images)
+            for f, img_path in enumerate(tqdm(all_paths, desc='Creating graphs - YOLO')):
             
                 features['paths'].append(img_path)
                 features['boxs'].append(all_preds[f])
@@ -423,5 +422,9 @@ class GraphBuilder():
                 # creating graph
                 g = dgl.graph((torch.tensor(u), torch.tensor(v)), num_nodes=len(features['boxs'][f]), idtype=torch.int32)
                 graphs.append(g)
+        else:
+            #TODO develop OCR too
+            raise Exception('GraphBuilder Exception: only \'gt\' or \'yolo\' available for FUNSD.')
+
 
         return graphs, node_labels, edge_labels, features

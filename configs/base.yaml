@@ -4,18 +4,24 @@
 LOADER:
   src_data:
     - FUNSD
-    # - NAF
+    # - PAU
     # - CUSTOM
 FEATURES:
-  add_embs: False
-  add_visual: False
-  add_eweights: False
-  add_fudge: False
+  add_embs: true
+  add_eweights: true
+  add_fudge: false
+  add_geom: true
+  add_hist: false
+  add_visual: true
 GRAPHS:
   edge_type:
     - fully
     # - knn
-    # - visibility
   data_type:
     - img
     # - pdf
+  node_granularity:
+    - gt
+    # - ocr
+    # - yolo  
+  

@@ -8,7 +8,6 @@ import dgl
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 import time
-from knockknock import discord_sender
 from statistics import mean
 import numpy as np
 import xml.etree.ElementTree as ET
@@ -21,10 +20,7 @@ from src.models.graphs import SetModel
 from src.utils import get_config
 from src.training.utils import *
 
-
-webhook_url = "https://discord.com/api/webhooks/997898000695316581/mIlHnPn95KTOYPS-hQFQFwaEhk0pa82ZR12OMZWZqXWwlH7fHjMZGnCXa03nvO_4cMzw"
-@discord_sender(webhook_url=webhook_url)
-def train_pau(args):
+def e2e(args):
 
     # configs
     start_training = time.time()
@@ -38,7 +34,6 @@ def train_pau(args):
         data = Document2Graph(name='PAU TRAIN', src_path=PAU_TRAIN, device = device, output_dir=TRAIN_SAMPLES)
         data.get_info()
 
-        # ss = ShuffleSplit(n_splits=10, test_size=cfg_train.val_size, random_state=cfg_train.seed)
         ss = KFold(n_splits=7, shuffle=True, random_state=cfg_train.seed)
         cv_indices = ss.split(data.graphs)
         
@@ -82,7 +77,6 @@ def train_pau(args):
                 model.train()
                 
                 n_scores, e_scores = model(tg, tg.ndata['feat'].to(device))
-                # loss = compute_loss_2(scores.flatten().to(device), tg.edata['label'].to(device))
                 n_loss = compute_crossentropy_loss(n_scores.to(device), tg.ndata['label'].to(device))
                 e_loss = compute_crossentropy_loss(e_scores.to(device), tg.edata['label'].to(device))
                 tot_loss = n_loss + e_loss
@@ -189,7 +183,7 @@ def train_pau(args):
     all_recalls = []
     all_f1 = []
 
-    for m in models:
+    for i, m in enumerate(models):
         model.load_state_dict(torch.load(CHECKPOINTS / m))
         model.eval()
         with torch.no_grad():
@@ -206,7 +200,7 @@ def train_pau(args):
             macro, micro = get_f1(n, test_graph.ndata['label'].to(device))
             nodes_micro.append(micro)
             if micro >= max(nodes_micro):
-                best_model = m
+                best_model = i
 
             test_graph.edata['preds'] = epreds
             test_graph.ndata['preds'] = npreds
@@ -288,17 +282,72 @@ def train_pau(args):
             all_f1.append(t_f1)
 
         ################* STEP 4: RESULTS ################
-        print("\n### RESULTS ###")
+        print("\n### RESULTS {} ###".format(m))
         print("AUC {:.4f}".format(auc))
         print("Accuracy {:.4f}".format(accuracy))
         print("F1 Edges: Macro {:.4f} - Micro {:.4f}".format(f1[0], f1[1]))
         print("F1 Edges: None {:.4f} - Table {:.4f}".format(classes_f1[0], classes_f1[1]))
         print("F1 Nodes: Macro {:.4f} - Micro {:.4f}".format(macro, micro))
     
-    print("TABLE DETECTION PRECISION [MAX, MEAN, STD]:", max(all_precisions), mean(all_precisions), np.std(all_precisions))
-    print("TABLE DETECTION RECALLS [MAX, MEAN, STD]:", max(all_recalls), mean(all_recalls), np.std(all_recalls))
-    print("TABLE DETECTION F1s [MAX, MEAN, STD]:", max(all_f1), mean(all_f1), np.std(all_f1))
-    print(f"\nLoading best model {best_model}")
+    print("\nTABLE DETECTION")
+    print("PRECISION [MAX, MEAN, STD]:", max(all_precisions), mean(all_precisions), np.std(all_precisions))
+    print("RECALLS [MAX, MEAN, STD]:", max(all_recalls), mean(all_recalls), np.std(all_recalls))
+    print("F1s [MAX, MEAN, STD]:", max(all_f1), mean(all_f1), np.std(all_f1))
+
+    ################* BEST MODEL STATISTICS ################
+    print(f"\nLoading best model {models[best_model]}")
+    print("F1 Edges: Table {:.4f}".format(edges_f1[best_model]))
+    print("F1 Nodes: Micro {:.4f}".format(nodes_micro[best_model]))
+    
+    if not args.test:
+        feat_n, feat_e = get_features(args)
+        #? if skipping training, no need to save anything
+        model = get_config(CFGM / args.model)
+        results = {'MODEL': {
+            'name': sm.get_name(),
+            'weights': best_model,
+            'net-params': sm.get_total_params(),
+            'projector-output': model.out_chunks,
+            'dropout': model.dropout,
+            'lastFC': model.hidden_dim
+            },
+            'FEATURES': {
+                'nodes': feat_n, 
+                'edges': feat_e
+            },
+            'PARAMS': {
+                'start-lr': cfg_train.lr,
+                'weight-decay': cfg_train.weight_decay,
+                'seed': cfg_train.seed
+            },
+            'RESULTS': {
+                'val-loss': stopper.best_score, 
+                'f1-scores': f1,
+		        'f1-classes': classes_f1,
+                'nodes-f1': [macro, micro],
+                'std-pairs': np.std(nodes_micro),
+                'mean-pairs': mean(nodes_micro),
+                'table-detection-precision': [max(all_precisions), mean(all_precisions), np.std(all_precisions)],
+                'table-detection-recall': [max(all_recalls), mean(all_recalls), np.std(all_recalls)],
+                'table-detection-f1': [max(all_f1), mean(all_f1), np.std(all_f1)]
+            }}
+        save_test_results(train_name, results)
+        print("END TRAINING:", time.time() - start_training)
+
+    return {'best_model': best_model, 'Nodes-F1': {'max': max(nodes_micro), 'mean': mean(nodes_micro), 'std': np.std(nodes_micro)}, 
+            'Edges-F1': {'max': max(edges_f1), 'mean': mean(edges_f1), 'std': np.std(edges_f1)}, 
+            'Table Detection': {'precision': [max(all_precisions), mean(all_precisions), np.std(all_precisions)], 'recall': [max(all_recalls), mean(all_recalls), np.std(all_recalls)], 'f1': [max(all_f1), mean(all_f1), np.std(all_f1)]}}
+
+def train_pau(args):
+
+    if args.model == 'e2e':
+        e2e(args)
+    else:
+        raise Exception("Model selected does not exists. Choose 'e2e'.")
+    return
+
+"""
+### OLD EVALUATIONS ###
     model.load_state_dict(torch.load(CHECKPOINTS / best_model))
     model.eval()
     with torch.no_grad():
@@ -384,110 +433,8 @@ def train_pau(args):
 
             test_data.print_graph(num=g, node_labels = None, labels_ids=None, name=f'test_{g}', bidirect=False, regions=regions, preds=table)
 
-        # test_data.print_graph(num=g, name=f'test_labels_{g}')
     t_recall = t_recall / (tables + no_table)
     t_precision = t_precision / (tables + no_table)
     t_f1 = (2 * t_precision * t_recall) / (t_precision + t_recall)
     print(t_precision, t_recall, t_f1)
-    if not args.test:
-        feat_n, feat_e = get_features(args)
-        #? if skipping training, no need to save anything
-        model = get_config(CFGM / args.model)
-        results = {'MODEL': {
-            'name': sm.get_name(),
-            'weights': best_model,
-            'net-params': sm.get_total_params(),
-            'projector-output': model.out_chunks,
-            'dropout': model.dropout,
-            'lastFC': model.hidden_dim
-            },
-            'FEATURES': {
-                'nodes': feat_n, 
-                'edges': feat_e
-            },
-            'PARAMS': {
-                'start-lr': cfg_train.lr,
-                'weight-decay': cfg_train.weight_decay,
-                'seed': cfg_train.seed
-            },
-            'RESULTS': {
-                'val-loss': stopper.best_score, 
-                'f1-scores': f1,
-		        'f1-classes': classes_f1,
-                'nodes-f1': [macro, micro],
-                'std-pairs': np.std(nodes_micro),
-                'mean-pairs': mean(nodes_micro),
-                'table-detection-precision': [max(all_precisions), mean(all_precisions), np.std(all_precisions)],
-                'table-detection-recall': [max(all_recalls), mean(all_recalls), np.std(all_recalls)],
-                'table-detection-f1': [max(all_f1), mean(all_f1), np.std(all_f1)]
-            }}
-        save_test_results(train_name, results)
-        print("TABLE DETECTION PRECISION [MAX, MEAN, STD]:", max(all_precisions), mean(all_precisions), np.std(all_precisions))
-        print("TABLE DETECTION RECALLS [MAX, MEAN, STD]:", max(all_recalls), mean(all_recalls), np.std(all_recalls))
-        print("TABLE DETECTION F1s [MAX, MEAN, STD]:", max(all_f1), mean(all_f1), np.std(all_f1))
-    
-    print("END TRAINING:", time.time() - start_training)
-    return {'best_model': best_model, 'Nodes-F1': {'max': max(nodes_micro), 'mean': mean(nodes_micro), 'std': np.std(nodes_micro)}, 
-            'Edges-F1': {'max': max(edges_f1), 'mean': mean(edges_f1), 'std': np.std(edges_f1)}, 
-            'Table Detection': {'precision': [max(all_precisions), mean(all_precisions), np.std(all_precisions)], 'recall': [max(all_recalls), mean(all_recalls), np.std(all_recalls)], 'f1': [max(all_f1), mean(all_f1), np.std(all_f1)]}}
-    # # TODO: FIX and CHECK
-    # pairs_ids = preds.nonzero().flatten().tolist()
-    # u, v = test_graph.edges()
-
-    # for idd, dst in enumerate(v.tolist()):
-    #     if idd not in pairs_ids: continue
-    #     scores_ = [scores[idd]]
-    #     id_ = [idd]
-    #     for ido, oth in enumerate(v.tolist()):
-    #         if ido != idd and dst == oth:
-    #             id_.append(ido)
-    #             scores_.append(scores[ido])
-    #     id_.pop(scores_.index(max(scores_)))
-    #     for id in id_: preds[id] = 0
-    
-    # test_graph.edata['preds'] = preds
-
-    # accuracy, f1 = get_binary_accuracy_and_f1(preds, test_graph.edata['label'])
-    # _, classes_f1 = get_binary_accuracy_and_f1(preds, test_graph.edata['label'], per_class=True)
-
-    # macro, micro = get_f1(n, test_graph.ndata['label'].to(device))
-
-    # ################* STEP 4: RESULTS ################
-    # print("\n### RESULTS POST-PROCESSING###")
-    # print("AUC {:.4f}".format(auc))
-    # print("Accuracy {:.4f}".format(accuracy))
-    # print("F1 Edges: Macro {:.4f} - Micro {:.4f}".format(f1[0], f1[1]))
-    # print("F1 Edges: None {:.4f} - Pairs {:.4f}".format(classes_f1[0], classes_f1[1]))
-    # print("F1 Nodes: Macro {:.4f} - Micro {:.4f}".format(macro, micro))
-
-    if not args.test:
-        feat_n, feat_e = get_features(args)
-        #? if skipping training, no need to save anything
-        model = get_config(CFGM / args.model)
-        results = {'MODEL': {
-            'name': sm.get_name(), 
-            'net-params': sm.get_total_params(),
-            'projector-output': model.out_chunks,
-            'dropout': model.dropout,
-            'lastFC': model.hidden_dim
-            },
-            'FEATURES': {
-                'nodes': feat_n, 
-                'edges': feat_e
-            },
-            'PARAMS': {
-                'start-lr': cfg_train.lr,
-                'weight-decay': cfg_train.weight_decay,
-                'seed': cfg_train.seed
-            },
-            'RESULTS': {
-                'val-loss': stopper.best_score, 
-                'f1-edge': f1,
-		        'f1-edge': classes_f1,
-                'f1-nodes': [macro, micro],
-                'AUC-PR': auc,
-            }}
-        save_test_results(train_name, results)
-    
-    print("END TRAINING:", time.time() - start_training)
-    return
+"""

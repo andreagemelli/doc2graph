@@ -8,27 +8,41 @@ from src.paths import CFGM
 from src.utils import get_config
 
 class SetModel():
-    def __init__(self, name='gcn', device = 'cpu') -> None:
+    def __init__(self, name='e2e', device = 'cpu'):
+        """ Create a SetModel object, that handles dinamically different version of Doc2Graph Model. Default "end-to-end" (e2e)
+
+        Args:
+            name (str) : Which model to train / test. Default: e2e [gcn, edge].
+        
+        Returns:
+            SetModel object.
+        """
 
         self.cfg_model = get_config(CFGM / name)
         self.name = self.cfg_model.name
         self.total_params = 0
         self.device = device
     
-    def get_name(self):
+    def get_name(self) -> str:
+        """ Returns model name.
+        """
         return self.name
     
-    def get_total_params(self):
+    def get_total_params(self) -> int:
+        """ Returns number of model parameteres.
+        """
         return self.total_params
 
-    def get_model(self, nodes, edges, chunks):
+    def get_model(self, nodes : int, edges : int, chunks : list) -> nn.Module:
         """Return the DGL model defined in the setting file
 
         Args:
-            nums (list): num_features and num_classes
+            nodes (int) : number of nodes target class
+            edges (int) : number of edges target class
+            chunks (list) : list of indeces of chunks
 
         Returns:
-            A PyTorch Model
+            A PyTorch nn.Module, your DGL model.
         """
         print("\n### MODEL ###")
         print(f"-> Using {self.name}")
@@ -40,7 +54,8 @@ class SetModel():
             m = EdgeClassifier(edges, self.cfg_model.num_layers, self.cfg_model.dropout, chunks, self.cfg_model.out_chunks, self.cfg_model.hidden_dim, self.device, self.cfg_model.doProject)
 
         elif self.name == 'E2E':
-            m = E2E(nodes,edges, self.cfg_model.dropout, chunks, self.cfg_model.out_chunks, self.cfg_model.hidden_dim, self.device, self.cfg_model.doProject)
+            edge_pred_features = int((math.log2(get_config('preprocessing').FEATURES.num_polar_bins) + nodes)*2)
+            m = E2E(nodes, edges, self.cfg_model.num_layers, self.cfg_model.dropout, chunks, self.cfg_model.out_chunks, self.cfg_model.hidden_dim, self.device,  edge_pred_features, self.cfg_model.doProject)
 
         else:
             raise Exception(f"Error! Model {self.name} do not exists.")
@@ -50,6 +65,7 @@ class SetModel():
         print(f"-> Total params: {self.total_params}")
         print("-> Device: " + str(next(m.parameters()).is_cuda) + "\n")
         print(m)
+
         return m
 
 ################
@@ -65,7 +81,7 @@ class NodeClassifier(nn.Module):
                  dropout=0,
                  use_pp=False,
                  device='cuda:0'):
-        super(GcnSAGE, self).__init__()
+        super(NodeClassifier, self).__init__()
 
         self.projector = InputProjector(in_chunks, out_chunks, device)
         self.layers = nn.ModuleList()
@@ -82,7 +98,7 @@ class NodeClassifier(nn.Module):
         self.layers.append(GcnSAGELayer(n_hidden, n_classes, activation=None,
                                     dropout=False, use_pp=False, use_lynorm=False))
 
-    def forward(self, g, h): #, padding=False):
+    def forward(self, g, h):
         
         h = self.projector(h)
 
@@ -107,7 +123,6 @@ class EdgeClassifier(nn.Module):
         self.message_passing = nn.ModuleList()
         self.m_layers = m_layers
         for l in range(m_layers):
-            # self.message_passing.append(SAGEConv(m_hidden, m_hidden, 'mean', norm=nn.LayerNorm(m_hidden), activation=F.relu))
             self.message_passing.append(GcnSAGELayer(m_hidden, m_hidden, F.relu, 0.))
 
         # Define edge predictori layer
@@ -128,7 +143,16 @@ class EdgeClassifier(nn.Module):
 ###### E2E #####
 
 class E2E(nn.Module):
-    def __init__(self, node_classes, edge_classes, dropout, in_chunks, out_chunks, hidden_dim, device, doProject=True):
+    def __init__(self, node_classes, 
+                       edge_classes, 
+                       m_layers, 
+                       dropout, 
+                       in_chunks, 
+                       out_chunks, 
+                       hidden_dim, 
+                       device,
+                       edge_pred_features,
+                       doProject=True):
 
         super().__init__()
 
@@ -137,17 +161,14 @@ class E2E(nn.Module):
 
         # Perform message passing
         m_hidden = self.projector.get_out_lenght()
-        # self.message_passing = nn.ModuleList()
-        # self.m_layers = m_layers
+        self.message_passing = nn.ModuleList()
+        # self.m_layers = m_layers
         # for l in range(m_layers):
-            # self.message_passing.append(GcnSAGELayer(m_hidden, m_hidden, F.relu, 0.))
-        #self.att = GATv2Conv(m_hidden, m_hidden, num_heads=4, residual=True, activation=F.relu, feat_drop=0.2, negative_slope=0)
-        #self.pna = PNAConv(m_hidden, m_hidden, aggregators=['mean', 'max', 'min', 'std', 'var', 'sum'], 
-        #                    scalers=['identity'], delta=2.5, dropout=0.2, num_towers=2, residual=True, edge_feat_size=1)
+        #     self.message_passing.append(GcnSAGELayer(m_hidden, m_hidden, F.relu, 0.))
         self.message_passing = GcnSAGELayer(m_hidden, m_hidden, F.relu, 0.)
 
         # Define edge predictor layer
-        self.edge_pred = MLPPredictor_E2E(m_hidden, hidden_dim, edge_classes, dropout)
+        self.edge_pred = MLPPredictor_E2E(m_hidden, hidden_dim, edge_classes, dropout,  edge_pred_features)
 
         # Define node predictor layer
         node_pred = []
@@ -158,11 +179,8 @@ class E2E(nn.Module):
     def forward(self, g, h):
 
         h = self.projector(h)
-
-        #h, e = self.att(g, h, get_attention=True)
-        #h = torch.mean(h, 1)
-        #e = torch.mean(e, 1)
-        #h = self.pna(g, h, e)
+        # for l in range(self.m_layers):
+        #     h = self.message_passing[l](g, h)
         h = self.message_passing(g,h)
         n = self.node_pred(h)
         e = self.edge_pred(g, h, n)
@@ -182,8 +200,6 @@ class GcnSAGELayer(nn.Module):
                  use_pp=False,
                  use_lynorm=True):
         super(GcnSAGELayer, self).__init__()
-        # The input feature size gets doubled as we concatenated the original
-        # features with the new features.
         self.linear = nn.Linear(2 * in_feats, out_feats, bias=bias)
         self.activation = activation
         self.use_pp = use_pp
@@ -309,10 +325,10 @@ class MLPPredictor(nn.Module):
             return graph.edata['score']
 
 class MLPPredictor_E2E(nn.Module):
-    def __init__(self, in_features, hidden_dim, out_classes, dropout):
+    def __init__(self, in_features, hidden_dim, out_classes, dropout,  edge_pred_features):
         super().__init__()
         self.out = out_classes
-        self.W1 = nn.Linear(in_features*2 + 14, hidden_dim)
+        self.W1 = nn.Linear(in_features*2 +  edge_pred_features, hidden_dim)
         self.norm = nn.LayerNorm(hidden_dim)
         self.W2 = nn.Linear(hidden_dim, out_classes)
         self.drop = nn.Dropout(dropout)
@@ -322,12 +338,9 @@ class MLPPredictor_E2E(nn.Module):
         h_v = edges.dst['h']
         cls_u = F.softmax(edges.src['cls'], dim=1)
         cls_v = F.softmax(edges.dst['cls'], dim=1)
-        #hist_u = edges.src['hist']
-        #hist_v = edges.dst['hist']
         polar = edges.data['feat']
 
         x = F.relu(self.norm(self.W1(torch.cat((h_u, cls_u, polar, h_v, cls_v), dim=1))))
-        # x = torch.cat((x, polar), dim=1)
         score = self.drop(self.W2(x))
 
         return {'score': score}

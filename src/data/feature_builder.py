@@ -29,13 +29,14 @@ class FeatureBuilder():
         self.add_visual = self.cfg_preprocessing.FEATURES.add_visual
         self.add_eweights = self.cfg_preprocessing.FEATURES.add_eweights
         self.add_fudge = self.cfg_preprocessing.FEATURES.add_fudge
+        self.num_polar_bins = self.cfg_preprocessing.FEATURES.num_polar_bins
 
         if self.add_embs:
             self.text_embedder = spacy.load('en_core_web_lg')
 
         if self.add_visual:
             self.visual_embedder = Unet(encoder_name="mobilenet_v2", encoder_weights=None, in_channels=1, classes=4)
-            self.visual_embedder.load_state_dict(torch.load(CHECKPOINTS / 'backbone_unet_new.pth')['weights'])
+            self.visual_embedder.load_state_dict(torch.load(CHECKPOINTS / 'backbone_unet.pth')['weights'])
             self.visual_embedder = self.visual_embedder.encoder
             self.visual_embedder.to(d)
         
@@ -84,10 +85,7 @@ class FeatureBuilder():
             # https://pytorch.org/vision/stable/generated/torchvision.ops.roi_align.html?highlight=roi
             if self.add_visual:
                 img = Image.open(features['paths'][id])
-                # img = torchvision.transforms.functional.resize(img, size=(1000, 736))
                 visual_emb = self.visual_embedder(tvF.to_tensor(img).unsqueeze_(0).to(self.device)) # output [batch, channels, dim1, dim2]
-                # factor = (1024/size[0], 736/size[1]) # (1, 3, 1024, 736)
-                # bboxs = [torch.Tensor(sv(b, factor)) for b in features['boxs'][id]]
                 bboxs = [torch.Tensor(b) for b in features['boxs'][id]]
                 bboxs = [torch.stack(bboxs, dim=0).to(self.device)]
                 h = [torchvision.ops.roi_align(input=ve, boxes=bboxs, spatial_scale=1/ min(size[1] / ve.shape[2] , size[0] / ve.shape[3]), output_size=1) for ve in visual_emb[1:]]
@@ -114,7 +112,7 @@ class FeatureBuilder():
                     angles.append(angle)
                 
                 m = max(distances)
-                polar_coordinates = to_bin(distances, angles)
+                polar_coordinates = to_bin(distances, angles, self.num_polar_bins)
                 g.edata['feat'] = polar_coordinates
 
             else:

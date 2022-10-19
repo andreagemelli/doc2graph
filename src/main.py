@@ -30,15 +30,17 @@ def main():
                         help="if src-data is CUSTOM, define the data source type: img or pdf.")
     # graphs
     parser.add_argument("--edge-type", type=str, default='fully',
-                        help="choose the kind of connectivity in the graph. It can be: fully, knn or visibility.")
+                        help="choose the kind of connectivity in the graph. It can be: fully or knn.")
+    parser.add_argument("--node-granularity", type=str, default='gt',
+                        help="choose the granularity of nodes to be used. It can be: gt (if given), ocr (words) or yolo (entities).")
+    parser.add_argument("--num-polar-bins", type=int, default=8,
+                        help="number of bins into which discretize the space for edge polar features. It must be a power of 2: Default 8.")
 
     # training
-    parser.add_argument("--model", type=str, default='GCN',
-                        help="which model to use, which yaml file to load. GCN, EDGE, GAT")
+    parser.add_argument("--model", type=str, default='e2e',
+                        help="which model to use, which yaml file to load: e2e, edge or gcn")
     parser.add_argument("--gpu", type=int, default=-1,
                         help="which GPU to use. Set -1 to use CPU.")
-    parser.add_argument('--task', type=str, default='elab',
-                        help="Training task: 'elab', 'elin' or 'wgrp") 
     parser.add_argument('--test', action="store_true",
                         help="skip training")
     parser.add_argument('--weights', '-w', nargs='+', type=str, default=None,

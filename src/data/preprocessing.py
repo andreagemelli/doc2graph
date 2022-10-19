@@ -80,7 +80,7 @@ def get_objects(path, mode):
     return
 
 
-def load_predictions(name, path_preds, path_gts, path_images, debug=False):
+def load_predictions(path_preds, path_gts, path_images, debug=False):
     # TODO read txt file and pass bounding box to the other function.
 
     boxs_preds = []
@@ -247,11 +247,7 @@ def save_results():
 
 
 if __name__ == "__main__":
-    # bbox_gts = torch.Tensor([[3, 3, 6, 6], [7, 7, 11, 11], [10, 10, 17, 17]])
-    # bbox_preds = torch.Tensor([[1, 1, 4, 4], [5, 5, 7, 7], [15, 15, 20, 20], [2, 2, 4, 4]])
-
-    # print(match_pred_w_gt(bbox_preds, bbox_gts))
     path_preds = DATA / 'FUNSD' / 'test_bbox'
     path_images = FUNSD_TEST / 'images'
     path_gts = FUNSD_TEST / 'adjusted_annotations'
-    load_predictions('test', path_preds, path_gts, path_images, debug=True)
+    load_predictions(path_preds, path_gts, path_images, debug=True)

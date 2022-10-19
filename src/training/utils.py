@@ -1,6 +1,8 @@
+from argparse import ArgumentParser
 from cProfile import label
 import os
 from pickletools import optimize
+from typing import Tuple
 from itsdangerous import json
 import pandas as pd
 import sklearn
@@ -15,7 +17,7 @@ import shutil
 import yaml
 import numpy as np
 
-from src.paths import CHECKPOINTS, CONFIGS, OUTPUTS, RESULTS, WEIGHTS
+from src.paths import CHECKPOINTS, CONFIGS, OUTPUTS, RESULTS
 
 
 class EarlyStopping:
@@ -40,7 +42,16 @@ class EarlyStopping:
         if name == '': self.name = f'{e.strftime("%Y%m%d-%H%M")}'
         else: self.name = name
 
-    def step(self, score):
+    def step(self, score : float) -> str:
+        """ It does a step of the stopper. If metric does not encrease after a while, it stops the training.
+
+        Args:
+            score (float) : metric / value to keep track of.
+
+        Returns
+            A status used by traning to do things.
+        """
+
         if self.best_score is None:
             self.best_score = score
             self.save_checkpoint()
@@ -79,7 +90,7 @@ class EarlyStopping:
 
         return self.early_stop
 
-    def save_checkpoint(self):
+    def save_checkpoint(self) -> None:
         '''Saves model when validation acc increase.'''
         torch.save(self.model.state_dict(), CHECKPOINTS / f'{self.name}.pt')
 
@@ -91,7 +102,7 @@ def save_best_results(best_params : dict, rm_logs : bool = False) -> None:
         rm_logs (bool, optional): Remove tmp weights in output folder if True. Defaults to False.
     """
     models = OUTPUTS / 'tmp'
-    output = WEIGHTS / best_params['model']
+    output = CHECKPOINTS / best_params['model']
     shutil.copyfile(models / best_params['model'], output)
 
     new_configs = CONFIGS / (best_params['model'].split(".")[0] + '.yaml')
@@ -116,8 +127,8 @@ def save_test_results(filename : str, infos : dict) -> None:
     """Save test results.
 
     Args:
-        filename (str): _description_
-        infos (_type_): _description_
+        filename (str): name of the file to save results of experiments
+        infos (dict): what to save in the json file about training
     """
     results = RESULTS / (filename + '.json')
 
@@ -143,9 +154,8 @@ def get_f1(logits : torch.Tensor, labels : torch.Tensor, per_class = False) -> t
     else:
         return precision_recall_fscore_support(labels, indices, average=None)[2].tolist()
 
-def get_binary_accuracy_and_f1(classes, labels, per_class = False):
+def get_binary_accuracy_and_f1(classes, labels : torch.Tensor, per_class = False) -> Tuple[float, list]:
 
-    print(classes.shape, labels.shape)
     correct = torch.sum(classes.flatten() == labels)
     accuracy = correct.item() * 1.0 / len(labels)
     classes = classes.detach().cpu().numpy()
@@ -172,41 +182,6 @@ def accuracy(logits : torch.Tensor, labels : torch.Tensor) -> float:
     correct = torch.sum(indices == labels)
     return correct.item() * 1.0 / len(labels)
 
-def validate(model, graphs : list, device : str, loss_fcn) -> float:
-    """_summary_
-
-    Args:
-        model (_type_): _description_
-        graphs (list): _description_
-        device (str): _description_
-        loss_fcn (_type_): _description_
-
-    Returns:
-        float: _description_
-    """
-    model.eval()
-    val_acc = 0
-    with torch.no_grad():
-        all_graphs = dgl.batch(graphs).to(device)
-        feat = all_graphs.ndata['feat'].to(device)
-        target = all_graphs.ndata['label'].to(device)
-        logits = model(all_graphs, feat)
-        test_acc = accuracy(logits, target)
-        loss = loss_fcn(logits, target)
-    return test_acc, loss.item()
-
-def evaluate(model, graphs, device):
-    model.eval()
-    test_acc = 0
-    with torch.no_grad():
-        all_graphs = dgl.batch(graphs).to(device)
-        feat = all_graphs.ndata['feat'].to(device)
-        target = all_graphs.ndata['label'].to(device)
-        logits = model(all_graphs, feat)
-        test_acc = accuracy(logits, target)
-        macro, micro = get_f1(logits, target)
-    return test_acc, (macro, micro)
-
 def get_device(value : int) -> str:
     """Either to use cpu or gpu (and which one).
     """
@@ -215,7 +190,12 @@ def get_device(value : int) -> str:
     else: 
         return 'cuda:{}'.format(value)
 
-def get_features(args):
+def get_features(args : ArgumentParser) -> Tuple[str, str]:
+    """ Return description of the features used in the experiment
+
+    Args:
+        args (ArgumentParser) : your ArgumentParser
+    """
     feat_n = ''
     feat_e = 'false'
 
@@ -232,56 +212,15 @@ def get_features(args):
         
     return feat_n, feat_e
 
-def compute_loss(pos_score, neg_score, device):
-    scores = torch.cat([pos_score, neg_score])
-    s = F.sigmoid(scores)
-    print("\n", scores.shape, torch.max(s).item(), s.min().item(), ((s < 0.5).sum()/s.shape[0]).item(), pos_score.shape, neg_score.shape, "\n")
-    input()
-    labels = torch.cat([torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])])
-    w = torch.ones_like(labels)
-    w[pos_score.shape[0]:] = 0.01
-    return F.binary_cross_entropy_with_logits(scores.flatten().to(device), labels.to(device), weight=w.to('cuda:0'))
-
-def compute_auc(pos_score, neg_score):
-    scores = torch.cat([pos_score, neg_score]).detach().cpu().numpy()
-    labels = torch.cat(
-        [torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])]).cpu().numpy()
-    return roc_auc_score(labels, scores)
-
-def compute_loss_2(scores : torch.Tensor, labels : torch.Tensor):
-    
-    s = torch.sigmoid(scores)
-    # print("\n", scores.shape, torch.max(s).item(), s.min().item(), ((s < 0.5).sum()/s.shape[0]).item(), "\n")
-    # w = torch.ones_like(labels)
-    # w[pos_score.shape[0]:] = 0.01
-    # print(scores.dtype, labels.dtype)
-    w = class_weight.compute_sample_weight(class_weight='balanced', y=labels.cpu().numpy())
-    # w = [1e6 if (l == 1) else 0.1 for l in labels]
-    # print(np.unique(w))
-    return F.binary_cross_entropy_with_logits(scores, labels, weight=torch.tensor(w).to('cuda:0'))
-    # return F.binary_cross_entropy_with_logits(scores, labels)
-
 def compute_crossentropy_loss(scores : torch.Tensor, labels : torch.Tensor):
     w = class_weight.compute_class_weight(class_weight='balanced', classes= np.unique(labels.cpu().numpy()), y=labels.cpu().numpy())
     return torch.nn.CrossEntropyLoss(weight=torch.tensor(w, dtype=torch.float32).to('cuda:0'))(scores, labels)
-
-def compute_auc_2(scores, labels):
-    scores = scores.detach().cpu().numpy()
-    labels = labels.cpu().numpy()
-    # return roc_auc_score(labels, scores)
-    return average_precision_score(labels, scores)
 
 def compute_auc_mc(scores, labels):
     scores = scores.detach().cpu().numpy()
     labels = F.one_hot(labels).cpu().numpy()
     # return roc_auc_score(labels, scores)
     return average_precision_score(labels, scores)
-
-def compute_auc_all(scores, labels):
-    scores = scores.detach().cpu().numpy()
-    labels = labels.cpu().numpy()
-    optimal_thres = find_optimal_cutoff(labels, scores)
-    return roc_auc_score(labels, scores), optimal_thres
 
 def find_optimal_cutoff(target, predicted):
     """ Find the optimal probability cutoff point for a classification model related to event rate
