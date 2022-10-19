@@ -8,7 +8,7 @@ build
 cc.*
 
 #user-defined
-DATA
+DATAS
 _old
 *.env
 outputs
@@ -17,4 +17,4 @@ configs/preprocessing.yaml
 esempi
 examples
 src/models/yolov5
-src/models/checkpoints
+src/models/checkpointss
