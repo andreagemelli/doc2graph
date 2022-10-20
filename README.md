@@ -44,10 +44,13 @@ Finally, create the project folder structure and download data:
 python src/main.py --init
 ```
 The script will download and setup:
-- FUNSD and the 'adjusted_annotations' for FUNSD [^1] are given by the work of [^3].
+- FUNSD and the 'adjusted_annotations' for FUNSD[^1] are given by the work of[^3].
 - The yolo detection bbox described in the paper (If you want to use YOLOv5-small to detect entities, script in `notebooks/YOLO.ipynb`, refer to [their github](https://github.com/ultralytics/yolov5) for the installation. Clone the repository into `src/models/yolov5`).
-- The Pau Riba's [^2] dataset with our train / test split.
-- The model weights.
+- The Pau Riba's[^2] dataset with our train / test split.
+
+[^1]: G. Jaume et al., FUNSD: A Dataset for Form Understanding in Noisy Scanned Documents, ICDARW 2019
+[^2]: P. Riba et al, Table Detection in Invoice Documents by Graph Neural Networks, ICDAR 2019
+[^3]: Hieu M. Vu et al., REVISING FUNSD DATASET FOR KEY-VALUE DETECTION IN DOCUMENT IMAGES, arXiv preprint 2020
 
 **Checkpoints**
 You can download our model checkpoints [here](https://drive.google.com/file/d/15jKWYLTcb8VwE7XY_jcRvZTAmqy_ElJ_/view?usp=sharing). Place them into `src/models/checkpoints`.
@@ -65,32 +68,32 @@ python src/main.py [SETTINGS] --gpu 0 --test --weights *.pt
 The project can be customized either changing directly `configs/base.yaml` file or providing these flags when calling `src/main.py`.
 
 **Features**
- - --add_geom: True / False (to add positional features to graph nodes)
- - --add_embs: True / False (to add textual features to graph nodes)
- - --add_hist: True / False (to add visual features to graph nodes)
- - --add_visual: True / False (to add visual features to graph nodes)
- - --add_eweights: True / False (to add polar relative coordinates between nodes to graph edges)
+ - --add-geom: True / False (to add positional features to graph nodes)
+ - --add-embs: True / False (to add textual features to graph nodes)
+ - --add-hist: True / False (to add visual features to graph nodes)
+ - --add-visual: True / False (to add visual features to graph nodes)
+ - --add-eweights: True / False (to add polar relative coordinates between nodes to graph edges)
 
 **Data**
- - --src_data: (string) FUNSD or PAU [or CUSTOM, still under dev]
- - --src_type: (string) img, pdf [if src_data is CUSTOM, still under dev]
+ - --src-data: string [FUNSD, PAU or CUSTOM] (CUSTOM still under dev)
+ - --src-type: string [img, pdf] (if src_data is CUSTOM, still under dev)
 
 **Graphs**
- - --edge_type: (string) fully or knn to change the kind of connectivity
- - --node-granularity: (string) choose the granularity of nodes to be used. It can be: gt (if given), ocr (words) or yolo (entities)
- - --num-polar-bins: (int) number of bins into which discretize the space for edge polar features. It must be a power of 2: Default 8
+ - --edge-type: string [fully, knn] (to change the kind of connectivity)
+ - --node-granularity: string [gt, yolo, ocr] (choose the granularity of nodes to be used, gt (if given), ocr (words) or yolo (entities))
+ - --num-polar-bins: int [Default 8] (number of bins into which discretize the space for edge polar features. It must be a power of 2)
 
 Change directly `configs/train.yaml` for training settings or pass these flags to `src/main.py`. To create your own model (changing hyperparams) copy `configs/models/*.yaml`. 
 
 **Training/Testing**
-- --model: (str) which model to use, which yaml file to load: e2e, edge or gcn
-- --gpu: (int) which GPU to use. Set -1 to use CPU.
-- --test: (bool) skip training
-- --weights: provide weight file(s) relative path(s), if testing
+- --model: string [e2e, edge, gcn] (which model to use, which yaml file to load)
+- --gpu: int [Default -1] (which GPU to use. Set -1 to use CPU(
+- --test: true / false (skip training if true)
+- --weights: strin(s) (provide weight file(s) relative path(s), if testing)
 
 ## Testing
 
-You can use our pretrained models over the test sets of FUNSD [^1] and Pau Riba's [^2] datasets.
+You can use our pretrained models over the test sets of FUNSD[^1] and Pau Riba's[^2] datasets.
 
 1. On FUNSD we were able to perform both Semantic Entity Labeling and Entity Linking:
 
@@ -126,7 +129,3 @@ If you want to use our code in your project(s), please cite us:
   copyright = {Creative Commons Attribution Share Alike 4.0 International}
 }
 ```
----
-[^1] G. Jaume et al., FUNSD: A Dataset for Form Understanding in Noisy Scanned Documents, ICDARW 2019
-[^2] P. Riba et al, Table Detection in Invoice Documents by Graph Neural Networks, ICDAR 2019
-[^3] Hieu M. Vu et al., REVISING FUNSD DATASET FOR KEY-VALUE DETECTION IN DOCUMENT IMAGES, arXiv preprint 2020
