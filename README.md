@@ -1,19 +1,28 @@
 # doc2graph - Documents transformed to Graphs
 
 - [doc2graph - Documents transformed to Graphs](#doc2graph---documents-transformed-to-graphs)
-  - [Info](#info)
-  - [Install](#install)
+  - [Overview](#overview)
+  - [Environment Setup](#environment-setup)
   - [Training](#training)
-    - [Settings](#settings)
   - [Testing](#testing)
-    - [FUNSD](#funsd)
-    - [NAF](#naf)
+  - [Cite this project](#cite-this-project)
 
-## Info
-Library to convert documents to graphs and perform several tasks on different datasets, e.g. Key Information Extraction on FUNSD.
+## Overview
+This library is the implementation of the paper [Doc2Graph: a Task Agnostic Document Understanding Framework based on Graph Neural Networks](https://arxiv.org/abs/2208.11168), accepted at [TiE @ ECCV 2022](https://sites.google.com/view/tie-eccv2022/accepted-papers?authuser=0).
 
-## Install
+The model and pipeline aims at being task-agnostic on the domain of Document Understanding. It is an ongoing project, these are the steps already achieved and the ones we would like to implement in the future:
+
+- [x] Build a model based on GNNs to spot key-value relationships on forms
+- [x] Publish the preliminary results and the code
+- [ ] Extend the framework to other document-related tasks
+  - [x] Business documents Layout Analysis
+  - [x] Table Detection
+- [ ] Let the user train Doc2Graph over private / other datasets using our dataloader
+- [ ] Transform Doc2Graph into a PyPI package
+
+## Environment Setup
 Setup the initial conda environment
+
 ```
 create -n doc2graph python=3.9 ipython cudatoolkit=11.3 -c anaconda
 conda activate doc2graph
@@ -29,65 +38,95 @@ pip install dgl-cu113==0.8.2 -f https://data.dgl.ai/wheels/repo.html
 python -m spacy download en_core_web_lg
 ```
 
-If you want to use FUDGE pretrained model to detect entities and get their visual features:
-- refer to [their github](https://github.com/herobd/FUDGE) for installation and weights download
-- replace `run.py` and `model/yolo_box_detector.py` scripts with our custom version from [this drive](https://drive.google.com/drive/folders/1K66A_z-x7cF9piHN_T8TWuJ8k9LOAm7Y?usp=sharing)
+Finally, create the project folder structure and download data:
 
----
-## Training
-1. To download data and init project,
 ```
 python src/main.py --init
 ```
-2. To train a **GCN** model for **Entity Labeling** on FUNSD (using CPU):
+The script will download and setup:
+- FUNSD and the 'adjusted_annotations' for FUNSD [^1] are given by the work of [^3].
+- The yolo detection bbox described in the paper (If you want to use YOLOv5-small to detect entities, script in `notebooks/YOLO.ipynb`, refer to [their github](https://github.com/ultralytics/yolov5) for the installation. Clone the repository into `src/models/yolov5`).
+- The Pau Riba's [^2] dataset with our train / test split.
+- The model weights.
+
+**Checkpoints**
+You can download our model checkpoints [here](https://drive.google.com/file/d/15jKWYLTcb8VwE7XY_jcRvZTAmqy_ElJ_/view?usp=sharing). Place them into `src/models/checkpoints`.
+
+---
+## Training
+1. To train our **Doc2Graph** model (using CPU) use:
 ```
 python src/main.py [SETTINGS]
 ```
-3. To test a trained **GCN** model for **Entity Labeling** on FUNSD (using GPU):
+2. Instead, to test a trained **Doc2Graph** model (using GPU) [weights can be one or more file]:
 ```
-python src/main.py [SETTINGS] --gpu 0 --test --weights node.pt
+python src/main.py [SETTINGS] --gpu 0 --test --weights *.pt
 ```
-
-### Settings
 The project can be customized either changing directly `configs/base.yaml` file or providing these flags when calling `src/main.py`.
 
 **Features**
- - --add_embs: True / False (to add textual features to graph nodes)
- - --add_eweights: True / False (to add polar relative coordinates between nodes to graph edges)
- - --add_visual: True / False (to add visual features to graph nodes)
- - --add_fudge: True / False (to add fudge features to graph nodes)
- - --add_histogram: True / False (to add visual features to graph nodes)
  - --add_geom: True / False (to add positional features to graph nodes)
+ - --add_embs: True / False (to add textual features to graph nodes)
+ - --add_hist: True / False (to add visual features to graph nodes)
+ - --add_visual: True / False (to add visual features to graph nodes)
+ - --add_eweights: True / False (to add polar relative coordinates between nodes to graph edges)
 
-**Others**
+**Data**
+ - --src_data: (string) FUNSD or PAU [or CUSTOM, still under dev]
+ - --src_type: (string) img, pdf [if src_data is CUSTOM, still under dev]
+
+**Graphs**
  - --edge_type: (string) fully or knn to change the kind of connectivity
- - --src_data: (string) FUNSD or NAF [or CUSTOM]
- - --src_type: (string) img, pdf [if src_data is CUSTOM]
+ - --node-granularity: (string) choose the granularity of nodes to be used. It can be: gt (if given), ocr (words) or yolo (entities)
+ - --num-polar-bins: (int) number of bins into which discretize the space for edge polar features. It must be a power of 2: Default 8
 
-Change directly `configs/train.yaml` for training settings or create your own model copying `configs/models/gcn.yaml`.
+Change directly `configs/train.yaml` for training settings or pass these flags to `src/main.py`. To create your own model (changing hyperparams) copy `configs/models/*.yaml`. 
+
+**Training/Testing**
+- --model: (str) which model to use, which yaml file to load: e2e, edge or gcn
+- --gpu: (int) which GPU to use. Set -1 to use CPU.
+- --test: (bool) skip training
+- --weights: provide weight file(s) relative path(s), if testing
 
 ## Testing
-### FUNSD
 
-**Entity Labeling** reproduction:
-```
-python src/main.py -addG -addT -addE --model gcn --task elab --test --weights node.pt
-```
-- with Groun Truth: F1 Score: Macro 0.6921 - Micro 0.7851
+You can use our pretrained models over the test sets of FUNSD [^1] and Pau Riba's [^2] datasets.
 
-- with Preprocessing (Detector and OCRs)
+1. On FUNSD we were able to perform both Semantic Entity Labeling and Entity Linking:
 
-**Entity Linking** reproduction:
+**E2E-FUNSD-GT**:
 ```
-python src/main.py -addG -addT -addE --model edge --task elin --test --weights edge.pt
+python src/main.py -addG -addT -addE -addV --gpu 0 --test --weights e2e-funsd-best.pt
 ```
-- with Groun Truth: F1 Classes: None 0.9961 - Pairs 0.5606
 
-- with Preprocessing (Detector and OCRs)
+**E2E-FUNSD-YOLO**:
+```
+python src/main.py -addG -addT -addE -addV --gpu 0 --test --weights e2e-funsd-best.pt --node-granularity yolo
+```
 
-### NAF
-**Simple Subset**
+2. on Pau Riba's dataset, we were able to perform both Layout Analysis and Table Detection
+
+**E2E-PAU**:
 ```
-python src/main.py -addG -addF -addE --model edge --task elin --src-data NAF --test -w naf.pt
+python src/main.py -addG -addT -addE -addV --gpu 0 --test --weights e2e-pau-best.pt --src-data PAU --edge-type knn
 ```
-- with Groun Truth: F1 Classes: None 0.9900 - Key-Value 0.4718 - SameEntity 0.2985
+  
+---
+## Cite this project
+If you want to use our code in your project(s), please cite us:
+```
+@misc{https://doi.org/10.48550/arxiv.2208.11168,
+  doi = {10.48550/ARXIV.2208.11168},
+  url = {https://arxiv.org/abs/2208.11168},
+  author = {Gemelli, Andrea and Biswas, Sanket and Civitelli, Enrico and Lladós, Josep and Marinai, Simone},
+  keywords = {Computer Vision and Pattern Recognition (cs.CV), FOS: Computer and information sciences, FOS: Computer and information sciences},
+  title = {Doc2Graph: a Task Agnostic Document Understanding Framework based on Graph Neural Networks},
+  publisher = {arXiv},
+  year = {2022},
+  copyright = {Creative Commons Attribution Share Alike 4.0 International}
+}
+```
+---
+[^1] G. Jaume et al., FUNSD: A Dataset for Form Understanding in Noisy Scanned Documents, ICDARW 2019
+[^2] P. Riba et al, Table Detection in Invoice Documents by Graph Neural Networks, ICDAR 2019
+[^3] Hieu M. Vu et al., REVISING FUNSD DATASET FOR KEY-VALUE DETECTION IN DOCUMENT IMAGES, arXiv preprint 2020

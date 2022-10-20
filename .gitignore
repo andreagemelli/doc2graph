@@ -9,7 +9,7 @@ cc.*
 *.DS_Store
 
 #user-defined
-DATAS
+DATA
 _old
 *.env
 outputs
@@ -18,4 +18,5 @@ configs/preprocessing.yaml
 esempi
 examples
 src/models/yolov5
-src/models/checkpointss
+src/models/checkpoints
+prova*
