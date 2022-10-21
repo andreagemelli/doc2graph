@@ -1,11 +1,10 @@
-# doc2graph - Documents transformed to Graphs
+# <p align=center>`Doc2Graph`</p> 
 
-- [doc2graph - Documents transformed to Graphs](#doc2graph---documents-transformed-to-graphs)
-  - [Overview](#overview)
-  - [Environment Setup](#environment-setup)
-  - [Training](#training)
-  - [Testing](#testing)
-  - [Cite this project](#cite-this-project)
+- [Overview](#overview)
+- [Environment Setup](#environment-setup)
+- [Training](#training)
+- [Testing](#testing)
+- [Cite this project](#cite-this-project)
 
 ## Overview
 This library is the implementation of the paper [Doc2Graph: a Task Agnostic Document Understanding Framework based on Graph Neural Networks](https://arxiv.org/abs/2208.11168), accepted at [TiE @ ECCV 2022](https://sites.google.com/view/tie-eccv2022/accepted-papers?authuser=0).
