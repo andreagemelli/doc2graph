@@ -20,6 +20,8 @@ def funsd():
     download_url("https://guillaumejaume.github.io/FUNSD/dataset.zip", dlz)
     with zipfile.ZipFile(dlz, 'r') as zip_ref:
         zip_ref.extractall(DATA)
+    os.remove(dlz)
+    os.rename(DATA / 'dataset', DATA / 'FUNSD')
 
     # adjusted annotations
     aa_train = os.path.join(DATA / 'adjusted_annotations.zip')
@@ -49,9 +51,6 @@ def funsd():
         zip_ref.extractall(DATA / 'FUNSD/testing_data')
     os.remove(yolo_test)
 
-
-    os.remove(dlz)
-    os.rename(DATA / 'dataset', DATA / 'FUNSD')
     return
 
 def pau():
