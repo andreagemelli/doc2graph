@@ -1,11 +1,5 @@
 # <p align=center>`Doc2Graph`</p> 
 
-- [Overview](#overview)
-- [Environment Setup](#environment-setup)
-- [Training](#training)
-- [Testing](#testing)
-- [Cite this project](#cite-this-project)
-
 ## Overview
 This library is the implementation of the paper [Doc2Graph: a Task Agnostic Document Understanding Framework based on Graph Neural Networks](https://arxiv.org/abs/2208.11168), accepted at [TiE @ ECCV 2022](https://sites.google.com/view/tie-eccv2022/accepted-papers?authuser=0).
 
@@ -18,6 +12,12 @@ The model and pipeline aims at being task-agnostic on the domain of Document Und
   - [x] Table Detection
 - [ ] Let the user train Doc2Graph over private / other datasets using our dataloader
 - [ ] Transform Doc2Graph into a PyPI package
+
+Roadmap:
+- [Environment Setup](#environment-setup)
+- [Training](#training)
+- [Testing](#testing)
+- [Cite this project](#cite-this-project)
 
 ## Environment Setup
 Setup the initial conda environment
