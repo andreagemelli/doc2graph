@@ -6,7 +6,7 @@ The model and pipeline aims at being task-agnostic on the domain of Document Und
 
 - [x] Build a model based on GNNs to spot key-value relationships on forms
 - [x] Publish the preliminary results and the code
-- [ ] Extend the framework to other document-related tasks
+- [x] Extend the framework to other document-related tasks
   - [x] Business documents Layout Analysis
   - [x] Table Detection
 - [ ] Let the user train Doc2Graph over private / other datasets using our dataloader
@@ -22,7 +22,7 @@ Roadmap:
 Setup the initial conda environment
 
 ```
-create -n doc2graph python=3.9 ipython cudatoolkit=11.3 -c anaconda
+conda create -n doc2graph python=3.9 ipython cudatoolkit=11.3 -c anaconda
 conda activate doc2graph
 cd doc2graph
 ```
