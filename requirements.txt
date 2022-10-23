@@ -1,7 +1,7 @@
 attrdict==2.0.1
 itsdangerous==2.0.1
-numpy==1.21.3
-Pillow==9.1.0
+numpy>=1.22
+Pillow>=9.1.1
 PyYAML==6.0
 scikit_learn==1.0.2
 setuptools==59.2.0
