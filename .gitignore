@@ -1,6 +1,6 @@
 # system
 *.egg-info/
-__pycache__/
+*__pycache__/
 *.py[cod]
 *.eggs
 build
@@ -20,3 +20,4 @@ examples
 src/models/yolov5
 src/models/checkpoints
 prova*
+notebooks
