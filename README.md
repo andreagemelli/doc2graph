@@ -23,18 +23,19 @@ Roadmap:
 Setup the initial conda environment
 
 ```
-conda create -n doc2graph python=3.9 ipython cudatoolkit=11.3 -c anaconda
-conda activate doc2graph
+conda create -n doc2graph python=3.9 ipython cudatoolkit=11.3 -c anaconda &&
+conda activate doc2graph &&
 cd doc2graph
 ```
 
 Then, install [setuptools-git-versioning](https://pypi.org/project/setuptools-git-versioning/) and doc2graph package itself. The following has been tested only on linux: for different OS installations refer directly to [PyTorch](https://pytorch.org/get-started/previous-versions/) and [DGL](https://www.dgl.ai/pages/start.html) original documentation.
 
 ```
-pip install torch==1.11.0+cu113 torchvision==0.12.0+cu113 torchaudio==0.11.0 --extra-index-url https://download.pytorch.org/whl/cu113
-pip install dgl-cu113 dglgo -f https://data.dgl.ai/wheels/repo.html
-pip install setuptools-git-versioning && pip install -e .
-python -m spacy download en_core_web_lg
+pip install torch==1.11.0+cu113 torchvision==0.12.0+cu113 torchaudio==0.11.0 --extra-index-url &&
+https://download.pytorch.org/whl/cu113 &&
+pip install dgl-cu113 dglgo -f https://data.dgl.ai/wheels/repo.html &&
+pip install setuptools-git-versioning && pip install -e . &&
+pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.3.0/en_core_web_lg-3.3.0.tar.gz
 ```
 
 Finally, create the project folder structure and download data:

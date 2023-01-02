@@ -4,12 +4,12 @@ numpy>=1.22
 Pillow>=9.1.1
 PyYAML==6.0
 scikit_learn==1.0.2
-setuptools==59.2.0
+setuptools==65.5.1
 setuptools_git_versioning==1.9.2
-spacy==3.4.0
-pydantic==1.9.1
+spacy==3.3.0
+pydantic==1.8.2
 python-dotenv==0.20.0
-gitpython==2.1.7
+gitpython>=3.1.30
 gitdb2==3.0.1
 matplotlib==3.5.2
 segmentation-models-pytorch==0.2.1
