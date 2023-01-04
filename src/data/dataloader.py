@@ -6,21 +6,21 @@ import os
 import numpy as np
 import dgl
 from PIL import Image, ImageDraw
+import json
 
 from src.data.feature_builder import FeatureBuilder
 from src.data.graph_builder import GraphBuilder
 from src.utils import get_config
 
-class Document2Graph(data.Dataset):
+class Doc2Graph(data.Dataset):
     """This class convert documents (both images or pdfs) into graph structures.
     """
 
-    def __init__(self, name : str, src_path : str, device = str, output_dir = str):
+    def __init__(self, name : str, src_path : str, output_dir = str):
         """
         Args:
-            name (str): should be one of the following: ['gt', 'img', 'pdf']
+            name (str): give a name to refer to the dataset in use
             src_path (str): path to folder containing documents
-            device (str): device to use. can be 'cpu' or 'cuda:n'
             output_dir (str): where to save printed graphs examples
         """
 
@@ -32,21 +32,21 @@ class Document2Graph(data.Dataset):
         self.cfg_preprocessing = get_config('preprocessing')
         self.src_data = self.cfg_preprocessing.LOADER.src_data
         self.GB = GraphBuilder()
-        self.FB = FeatureBuilder(device)
+        self.FB = FeatureBuilder()
         self.output_dir = output_dir
 
-        # TODO: DO A DIFFERENT FILE
-        self.COLORS = {'invoice_info': (150, 75, 0), 'receiver':(0,100,0), 'other':(128, 128, 128), 'supplier': (255, 0, 255), 'positions':(255,140,0), 'total':(0, 255, 255)}
-
-        # get graphs
-        self.graphs, self.node_labels, self.edge_labels, self.paths = self.__docs2graphs()
+        # GET GRAPHS
+        self.graphs, self.node_labels, self.edge_labels, self.paths = self.__doc2graph()
         
-        # LABELS to numeric value
         # NODES
         if self.node_labels:
             self.node_unique_labels = np.unique(np.array([l for nl in self.node_labels for l in nl]))
+            self.COLORS = self.__get_colors()
             self.node_num_classes = len(self.node_unique_labels)
-            self.node_num_features = self.graphs[0].ndata['feat'].shape[1]
+            if 'feat' in self.graphs[0].ndata.keys():
+                self.node_num_features = self.graphs[0].ndata['feat'].shape[1]
+            else:
+                self.node_num_features = 0
         
             for idx, labels in enumerate(self.node_labels):
                 self.graphs[idx].ndata['label'] = torch.tensor([np.where(target == self.node_unique_labels)[0][0] for target in labels], dtype=torch.int64)
@@ -55,12 +55,11 @@ class Document2Graph(data.Dataset):
         if self.edge_labels:
             self.edge_unique_labels = np.unique(self.edge_labels[0])
             self.edge_num_classes = len(self.edge_unique_labels)
-            try:
-                # TODO to be changed
+            if 'feat' in self.graphs[0].edata.keys():
                 self.edge_num_features = self.graphs[0].edata['feat'].shape[1]
-            except:
+            else:
                 self.edge_num_features = 0
-        
+                
             for idx, labels in enumerate(self.edge_labels):
                 self.graphs[idx].edata['label'] = torch.tensor([np.where(target == self.edge_unique_labels)[0][0] for target in labels], dtype=torch.int64)
 
@@ -77,7 +76,24 @@ class Document2Graph(data.Dataset):
         """
         return len(self.graphs)
     
-    def __docs2graphs(self) -> Tuple[list, list, list, list]:
+    def __get_colors(self) -> dict:
+        """If it does not exist, write a file where a different RGB color is saved per each different class. Debug purposes.
+        """
+        colors_path = os.path.join(self.src_path, '../colors.json')
+        if os.path.isfile(colors_path):
+           with open(colors_path, "r") as infile:
+                colors = json.load(infile)
+        else:
+            colors = {}
+            for c in self.node_unique_labels:
+                colors[c] = tuple([int(np.random.choice(range(256))) for i in range(3)])
+            with open(colors_path, "w") as outfile:
+                json.dump(colors, outfile)
+        
+        return colors
+        
+    
+    def __doc2graph(self) -> Tuple[list, list, list, list]:
         """It uses GraphBuilder and FeaturesBuilder objects to get graphs (and lables, if any) from source data.
 
         Returns:
@@ -114,6 +130,7 @@ class Document2Graph(data.Dataset):
         print(f"-> graph example: {self.graphs[num_graph]}")
         return
     
+    # TODO: removing it?
     def balance(self, cls = 'none', indices = None) -> None:
         """ Calls balance_edges() of GraphBuilder.
 
@@ -131,6 +148,7 @@ class Document2Graph(data.Dataset):
         
         return
     
+    # TODO: refactor and move to FeatureBuilder
     def get_chunks(self) -> list:
         """ get feature_chunks, meaning the length of different modalities (features) contributions inside nodes.
 
@@ -140,6 +158,7 @@ class Document2Graph(data.Dataset):
         if len(self.feature_chunks) != self.num_mods: self.feature_chunks.pop(0)
         return self.feature_chunks
     
+    # TODO: refactor and move to GraphBuilder
     def print_graph(self, num=None, node_labels=None, labels_ids=None, name='doc_graph', bidirect=True, regions=[], preds=None) -> Image:
         """ Print a given graph over its image document.
 

@@ -182,14 +182,6 @@ def accuracy(logits : torch.Tensor, labels : torch.Tensor) -> float:
     correct = torch.sum(indices == labels)
     return correct.item() * 1.0 / len(labels)
 
-def get_device(value : int) -> str:
-    """Either to use cpu or gpu (and which one).
-    """
-    if value < 0: 
-        return 'cpu'
-    else: 
-        return 'cuda:{}'.format(value)
-
 def get_features(args : ArgumentParser) -> Tuple[str, str]:
     """ Return description of the features used in the experiment
 

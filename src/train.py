@@ -1,16 +1,11 @@
 import argparse
 
-from src.data.download import get_data
 from src.training.funsd import train_funsd
-from src.utils import project_tree, set_preprocessing
 from src.training.pau import train_pau
+from src.utils import set_preprocessing, set_device
 
 def main():
     parser = argparse.ArgumentParser(description='Training')
-
-    # init
-    parser.add_argument('--init', action="store_true",
-                        help="download data and prepare folders")
     
     # features
     parser.add_argument('--add-geom', '-addG', action="store_true",
@@ -48,25 +43,23 @@ def main():
          
     args = parser.parse_args()
     print(args)
+    set_preprocessing(args)
+    set_device(args.gpu)
 
-    if args.init:
-        project_tree()
-        get_data()
-        print("Initialization completed!")
+    if args.src_data == 'FUNSD':
+        if args.test and args.weights == None:
+            raise Exception("Main exception: Provide a weights file relative path! Or train a model first.")
+        train_funsd(args)
+
+    elif args.src_data == 'PAU':
+        train_pau(args)
+
+    elif args.src_data == 'CUSTOM':
+        # TODO: develop custom data preprocessing
+        raise Exception('Main exception: "CUSTOM" source data still under development')
 
     else:
-        set_preprocessing(args)
-        if args.src_data == 'FUNSD':
-            if args.test and args.weights == None:
-                raise Exception("Main exception: Provide a weights file relative path! Or train a model first.")
-            train_funsd(args)
-        elif args.src_data == 'PAU':
-            train_pau(args)
-        elif args.src_data == 'CUSTOM':
-            #TODO develop custom data preprocessing
-            raise Exception('Main exception: "CUSTOM" source data still under development')
-        else:
-            raise Exception('Main exception: source data invalid. Choose from ["FUNSD", "PAU", "CUSTOM"]')
+        raise Exception('Main exception: source data invalid. Choose from ["FUNSD", "PAU", "CUSTOM"]')
     
     return
 
