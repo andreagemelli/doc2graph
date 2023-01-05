@@ -12,17 +12,14 @@ from src.models.unet import Unet
 from src.data.utils import to_bin
 from src.data.utils import polar, get_histogram
 from src.utils import get_config
+from src.globals import DEVICE
 
 class FeatureBuilder():
 
-    def __init__(self, d : int):
+    def __init__(self):
         """FeatureBuilder constructor
-
-        Args:
-            d (int): device number, if any (cpu or cuda:n)
         """
         self.cfg_preprocessing = get_config('preprocessing')
-        self.device = d
         self.add_geom = self.cfg_preprocessing.FEATURES.add_geom
         self.add_embs = self.cfg_preprocessing.FEATURES.add_embs
         self.add_hist = self.cfg_preprocessing.FEATURES.add_hist
@@ -38,7 +35,7 @@ class FeatureBuilder():
             self.visual_embedder = Unet(encoder_name="mobilenet_v2", encoder_weights=None, in_channels=1, classes=4)
             self.visual_embedder.load_state_dict(torch.load(CHECKPOINTS / 'backbone_unet.pth')['weights'])
             self.visual_embedder = self.visual_embedder.encoder
-            self.visual_embedder.to(d)
+            self.visual_embedder.to(DEVICE)
         
         self.sg = lambda rect, s : [rect[0]/s[0], rect[1]/s[1], rect[2]/s[0], rect[3]/s[1]] # scaling by img width and height
     
@@ -85,9 +82,9 @@ class FeatureBuilder():
             # https://pytorch.org/vision/stable/generated/torchvision.ops.roi_align.html?highlight=roi
             if self.add_visual:
                 img = Image.open(features['paths'][id])
-                visual_emb = self.visual_embedder(tvF.to_tensor(img).unsqueeze_(0).to(self.device)) # output [batch, channels, dim1, dim2]
+                visual_emb = self.visual_embedder(tvF.to_tensor(img).unsqueeze_(0).to(DEVICE)) # output [batch, channels, dim1, dim2]
                 bboxs = [torch.Tensor(b) for b in features['boxs'][id]]
-                bboxs = [torch.stack(bboxs, dim=0).to(self.device)]
+                bboxs = [torch.stack(bboxs, dim=0).to(DEVICE)]
                 h = [torchvision.ops.roi_align(input=ve, boxes=bboxs, spatial_scale=1/ min(size[1] / ve.shape[2] , size[0] / ve.shape[3]), output_size=1) for ve in visual_emb[1:]]
                 h = torch.cat(h, dim=1)
 

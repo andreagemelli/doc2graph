@@ -4,154 +4,19 @@ import dgl.function as fn
 import math
 import torch.nn.functional as F
 
-from src.paths import CFGM
-from src.utils import get_config
-
-class SetModel():
-    def __init__(self, name='e2e', device = 'cpu'):
-        """ Create a SetModel object, that handles dinamically different version of Doc2Graph Model. Default "end-to-end" (e2e)
-
-        Args:
-            name (str) : Which model to train / test. Default: e2e [gcn, edge].
-        
-        Returns:
-            SetModel object.
-        """
-
-        self.cfg_model = get_config(CFGM / name)
-        self.name = self.cfg_model.name
-        self.total_params = 0
-        self.device = device
-    
-    def get_name(self) -> str:
-        """ Returns model name.
-        """
-        return self.name
-    
-    def get_total_params(self) -> int:
-        """ Returns number of model parameteres.
-        """
-        return self.total_params
-
-    def get_model(self, nodes : int, edges : int, chunks : list) -> nn.Module:
-        """Return the DGL model defined in the setting file
-
-        Args:
-            nodes (int) : number of nodes target class
-            edges (int) : number of edges target class
-            chunks (list) : list of indeces of chunks
-
-        Returns:
-            A PyTorch nn.Module, your DGL model.
-        """
-        print("\n### MODEL ###")
-        print(f"-> Using {self.name}")
-
-        if self.name == 'GCN':
-            m = NodeClassifier(chunks, self.cfg_model.out_chunks, nodes, self.cfg_model.num_layers, F.relu, False, self.device)
-        
-        elif self.name == 'EDGE':
-            m = EdgeClassifier(edges, self.cfg_model.num_layers, self.cfg_model.dropout, chunks, self.cfg_model.out_chunks, self.cfg_model.hidden_dim, self.device, self.cfg_model.doProject)
-
-        elif self.name == 'E2E':
-            edge_pred_features = int((math.log2(get_config('preprocessing').FEATURES.num_polar_bins) + nodes)*2)
-            m = E2E(nodes, edges, self.cfg_model.num_layers, self.cfg_model.dropout, chunks, self.cfg_model.out_chunks, self.cfg_model.hidden_dim, self.device,  edge_pred_features, self.cfg_model.doProject)
-
-        else:
-            raise Exception(f"Error! Model {self.name} do not exists.")
-        
-        m.to(self.device)
-        self.total_params = sum(p.numel() for p in m.parameters() if p.requires_grad)
-        print(f"-> Total params: {self.total_params}")
-        print("-> Device: " + str(next(m.parameters()).is_cuda) + "\n")
-        print(m)
-
-        return m
-
-################
-##### GCNS #####
-
-class NodeClassifier(nn.Module):
-    def __init__(self,
-                 in_chunks,
-                 out_chunks,
-                 n_classes,
-                 n_layers,
-                 activation,
-                 dropout=0,
-                 use_pp=False,
-                 device='cuda:0'):
-        super(NodeClassifier, self).__init__()
-
-        self.projector = InputProjector(in_chunks, out_chunks, device)
-        self.layers = nn.ModuleList()
-        # self.dropout = nn.Dropout(dropout)
-        self.n_layers = n_layers
-
-        n_hidden = self.projector.get_out_lenght()
-
-        # mp layers
-        for i in range(0, n_layers - 1):
-            self.layers.append(GcnSAGELayer(n_hidden, n_hidden, activation=activation, 
-                        dropout=dropout, use_pp=False, use_lynorm=True))
-
-        self.layers.append(GcnSAGELayer(n_hidden, n_classes, activation=None,
-                                    dropout=False, use_pp=False, use_lynorm=False))
-
-    def forward(self, g, h):
-        
-        h = self.projector(h)
-
-        for l in range(self.n_layers):
-            h = self.layers[l](g, h)
-        
-        return h
-
-################
-##### EDGE #####
-
-class EdgeClassifier(nn.Module):
-
-    def __init__(self, edge_classes, m_layers, dropout, in_chunks, out_chunks, hidden_dim, device, doProject=True):
-        super().__init__()
-
-        # Project inputs into higher space
-        self.projector = InputProjector(in_chunks, out_chunks, device, doProject)
-
-        # Perform message passing
-        m_hidden = self.projector.get_out_lenght()
-        self.message_passing = nn.ModuleList()
-        self.m_layers = m_layers
-        for l in range(m_layers):
-            self.message_passing.append(GcnSAGELayer(m_hidden, m_hidden, F.relu, 0.))
-
-        # Define edge predictori layer
-        self.edge_pred = MLPPredictor(m_hidden, hidden_dim, edge_classes, dropout)  
-
-    def forward(self, g, h):
-
-        h = self.projector(h)
-
-        for l in range(self.m_layers):
-            h = self.message_passing[l](g, h)
-        
-        e = self.edge_pred(g, h)
-
-        return e
-
 ################
 ###### E2E #####
 
 class E2E(nn.Module):
     def __init__(self, node_classes, 
-                       edge_classes, 
-                       m_layers, 
-                       dropout, 
-                       in_chunks, 
-                       out_chunks, 
-                       hidden_dim, 
+                       edge_classes,
+                       in_chunks,
                        device,
                        edge_pred_features,
+                       m_layers, 
+                       dropout, 
+                       out_chunks, 
+                       hidden_dim, 
                        doProject=True):
 
         super().__init__()

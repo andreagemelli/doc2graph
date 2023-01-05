@@ -297,7 +297,7 @@ class GraphBuilder():
         if self.node_granularity == 'gt':
             for file in tqdm(os.listdir(os.path.join(src, 'adjusted_annotations')), desc='Creating graphs - GT'):
             
-                img_name = f'{file.split(".")[0]}.jpg'
+                img_name = f'{file.split(".")[0]}.png'
                 img_path = os.path.join(src, 'images', img_name)
                 features['paths'].append(img_path)
 

@@ -1,7 +1,9 @@
 import argparse
 
-from src.training.funsd import train_funsd
-from src.training.pau import train_pau
+from src.models.pau import train_pau
+from src.models.training import train
+from src.models.testing import test
+from src.paths import FUNSD_TRAIN, FUNSD_TEST
 from src.utils import set_preprocessing, set_device
 
 def main():
@@ -32,27 +34,32 @@ def main():
                         help="number of bins into which discretize the space for edge polar features. It must be a power of 2: Default 8.")
 
     # training
-    parser.add_argument("--model", type=str, default='e2e',
-                        help="which model to use, which yaml file to load: e2e, edge or gcn")
     parser.add_argument("--gpu", type=int, default=-1,
                         help="which GPU to use. Set -1 to use CPU.")
     parser.add_argument('--test', action="store_true",
                         help="skip training")
-    parser.add_argument('--weights', '-w', nargs='+', type=str, default=None,
+    parser.add_argument('--weights', '-w', type=str, default=None,
                         help="provide a weights file relative path if testing")
-         
+            
     args = parser.parse_args()
+
+    if args.test and args.weights == None:
+        raise Exception("Main exception: Provide a weights file relative path! Or train a model first.")
+
     print(args)
     set_preprocessing(args)
     set_device(args.gpu)
 
     if args.src_data == 'FUNSD':
-        if args.test and args.weights == None:
-            raise Exception("Main exception: Provide a weights file relative path! Or train a model first.")
-        train_funsd(args)
+        
+        if not args.test:
+            train(FUNSD_TRAIN)
+
+        test(args, FUNSD_TEST)
 
     elif args.src_data == 'PAU':
-        train_pau(args)
+        # TODO: under refactoring
+        print('PAU branch under refactoring')
 
     elif args.src_data == 'CUSTOM':
         # TODO: develop custom data preprocessing

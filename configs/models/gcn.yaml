@@ -1,6 +1,0 @@
-name: GCN
-dropout: 0.0
-hidden_dim: 64
-num_layers: 3
-attn: False
-out_chunks: 100

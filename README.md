@@ -61,15 +61,15 @@ You can download our model checkpoints [here](https://drive.google.com/file/d/15
 
 ---
 ## Training
-1. To train our **Doc2Graph** model (using CPU) use:
+1. To train yours **Doc2Graph** model (using CPU) use:
 ```
-python src/train.py [SETTINGS]
+python src/main.py [SETTINGS]
 ```
 2. Instead, to test a trained **Doc2Graph** model (using GPU) [weights can be one or more file]:
 ```
 python src/train.py [SETTINGS] --gpu 0 --test --weights *.pt
 ```
-The project can be customized either changing directly `configs/base.yaml` file or providing these flags when calling `src/train.py`.
+The project can be customized either changing directly `configs/base.yaml` file or providing these flags when calling `src/main.py`.
 
 **Features**
  - --add-geom: True / False (to add positional features to graph nodes)
@@ -87,11 +87,10 @@ The project can be customized either changing directly `configs/base.yaml` file 
  - --node-granularity: string [gt, yolo, ocr] (choose the granularity of nodes to be used, gt (if given), ocr (words) or yolo (entities))
  - --num-polar-bins: int [Default 8] (number of bins into which discretize the space for edge polar features. It must be a power of 2)
 
-Change directly `configs/train.yaml` for training settings or pass these flags to `src/train.py`. To create your own model (changing hyperparams) copy `configs/models/*.yaml`. 
+Change directly `configs/train.yaml` for training settings or pass these flags to `src/main.py`. To create your own model (changing hyperparams) copy `configs/models/*.yaml`. 
 
 **Training/Testing**
-- --model: string [e2e, edge, gcn] (which model to use, which yaml file to load)
-- --gpu: int [Default -1] (which GPU to use. Set -1 to use CPU(
+- --gpu: int [Default -1] (which GPU to use. Set -1 to use CPU)
 - --test: true / false (skip training if true)
 - --weights: strin(s) (provide weight file(s) relative path(s), if testing)
 
@@ -103,19 +102,19 @@ You can use our pretrained models over the test sets of FUNSD[^1] and Pau Riba's
 
 **E2E-FUNSD-GT**:
 ```
-python src/train.py -addG -addT -addE -addV --gpu 0 --test --weights e2e-funsd-best.pt
+python src/main.py -addG -addT -addE -addV --gpu 0 --test --weights e2e-funsd-best.pt
 ```
 
 **E2E-FUNSD-YOLO**:
 ```
-python src/train.py -addG -addT -addE -addV --gpu 0 --test --weights e2e-funsd-best.pt --node-granularity yolo
+python src/main.py -addG -addT -addE -addV --gpu 0 --test --weights e2e-funsd-best.pt --node-granularity yolo
 ```
 
 2. on Pau Riba's dataset, we were able to perform both Layout Analysis and Table Detection
 
 **E2E-PAU**:
 ```
-python src/train.py -addG -addT -addE -addV --gpu 0 --test --weights e2e-pau-best.pt --src-data PAU --edge-type knn
+python src/main.py -addG -addT -addE -addV --gpu 0 --test --weights e2e-pau-best.pt --src-data PAU --edge-type knn
 ```
   
 ---

@@ -10,7 +10,6 @@ ROOT = Path(config['ROOT'])
 # PROJECT TREE
 DATA = ROOT / 'DATA'
 CONFIGS = ROOT / 'configs'
-CFGM = CONFIGS / 'models'
 OUTPUTS = ROOT / 'outputs'
 RUNS = OUTPUTS / 'runs'
 RESULTS = OUTPUTS / 'results'

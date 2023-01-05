@@ -2,9 +2,6 @@ batch_size: 15
 epochs: 100000
 lr: 1e-3
 weight_decay: 1e-4
-val_size : 0.1
-optimizer: Adam # or AdamW, SGD - NOT YET IMPLEMENTED
-scheduler:
-  - ReduceLROnPlateau # CosineAnnealingLR, None- NOT YET IMPLEMENTED
 stopper_metric: acc # loss or acc
 seed: 42
+n_splits: 10

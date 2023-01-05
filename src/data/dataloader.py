@@ -12,7 +12,7 @@ from src.data.feature_builder import FeatureBuilder
 from src.data.graph_builder import GraphBuilder
 from src.utils import get_config
 
-class Doc2Graph(data.Dataset):
+class Doc2GraphLoader(data.Dataset):
     """This class convert documents (both images or pdfs) into graph structures.
     """
 
