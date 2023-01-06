@@ -12,7 +12,7 @@ from src.models.unet import Unet
 from src.data.utils import to_bin
 from src.data.utils import polar, get_histogram
 from src.utils import get_config
-from src.globals import DEVICE
+import src.globals as glb
 
 class FeatureBuilder():
 
@@ -20,6 +20,7 @@ class FeatureBuilder():
         """FeatureBuilder constructor
         """
         self.cfg_preprocessing = get_config('preprocessing')
+        self.device = glb.DEVICE
         self.add_geom = self.cfg_preprocessing.FEATURES.add_geom
         self.add_embs = self.cfg_preprocessing.FEATURES.add_embs
         self.add_hist = self.cfg_preprocessing.FEATURES.add_hist
@@ -35,7 +36,7 @@ class FeatureBuilder():
             self.visual_embedder = Unet(encoder_name="mobilenet_v2", encoder_weights=None, in_channels=1, classes=4)
             self.visual_embedder.load_state_dict(torch.load(CHECKPOINTS / 'backbone_unet.pth')['weights'])
             self.visual_embedder = self.visual_embedder.encoder
-            self.visual_embedder.to(DEVICE)
+            self.visual_embedder.to(self.device)
         
         self.sg = lambda rect, s : [rect[0]/s[0], rect[1]/s[1], rect[2]/s[0], rect[3]/s[1]] # scaling by img width and height
     
@@ -61,9 +62,11 @@ class FeatureBuilder():
             # 'geometrical' features
             if self.add_geom:
                 
-                # TODO add 2d encoding like "LayoutLM*"
-                [feats[idx].extend(self.sg(box, size)) for idx, box in enumerate(features['boxs'][id])]
-                chunks.append(4)
+                # OLD DOC2GRAPH
+                # [feats[idx].extend(self.sg(box, size)) for idx, box in enumerate(features['boxs'][id])]
+                # chunks.append(4)
+                [feats[idx].extend([box[0], box[1], box[2], box[3], box[2] - box[0], box[3] - box[1]]) for idx, box in enumerate(features['boxs'][id])]
+                chunks.append(len(feats[0]))
             
             # HISTOGRAM OF TEXT
             if self.add_hist:
@@ -82,9 +85,9 @@ class FeatureBuilder():
             # https://pytorch.org/vision/stable/generated/torchvision.ops.roi_align.html?highlight=roi
             if self.add_visual:
                 img = Image.open(features['paths'][id])
-                visual_emb = self.visual_embedder(tvF.to_tensor(img).unsqueeze_(0).to(DEVICE)) # output [batch, channels, dim1, dim2]
+                visual_emb = self.visual_embedder(tvF.to_tensor(img).unsqueeze_(0).to(self.device)) # output [batch, channels, dim1, dim2]
                 bboxs = [torch.Tensor(b) for b in features['boxs'][id]]
-                bboxs = [torch.stack(bboxs, dim=0).to(DEVICE)]
+                bboxs = [torch.stack(bboxs, dim=0).to(self.device)]
                 h = [torchvision.ops.roi_align(input=ve, boxes=bboxs, spatial_scale=1/ min(size[1] / ve.shape[2] , size[0] / ve.shape[3]), output_size=1) for ve in visual_emb[1:]]
                 h = torch.cat(h, dim=1)
 

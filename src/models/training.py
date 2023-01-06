@@ -8,7 +8,7 @@ from src.paths import *
 from src.models.setter import Doc2GraphModel
 from src.utils import get_config
 from src.models.utils import *
-from src.globals import DEVICE
+import src.globals as glb
 
 def train(src):
 
@@ -37,11 +37,12 @@ def train(src):
 
         train_graphs = [data.graphs[i] for i in train_index]
         tg = dgl.batch(train_graphs)
-        tg = tg.int().to(DEVICE)
+        print(glb.DEVICE)
+        tg = tg.int().to(glb.DEVICE)
     
         val_graphs = [data.graphs[i] for i in val_index]
         vg = dgl.batch(val_graphs)
-        vg = vg.int().to(DEVICE)
+        vg = vg.int().to(glb.DEVICE)
         
         model.set_optimizer(lr=float(cfg_train.lr), wd=float(cfg_train.weight_decay))
         # scheduler = ReduceLROnPlateau(optimizer, 'max', patience=400, min_lr=1e-3, verbose=True, factor=0.01)
@@ -49,7 +50,7 @@ def train(src):
         models.append(f"{run}/split{split}.pt")
         stopper = EarlyStopping(model, f"{run}/split{split}.pt", metric=cfg_train.stopper_metric, patience=2000)
     
-        print(f"\n### TRAINING - SPLIT {split}###")
+        print(f"\n### TRAINING - SPLIT {split} ###")
         print(f"-> Training samples: {tg.batch_size}")
         print(f"-> Validation samples: {vg.batch_size}\n")
 
@@ -57,7 +58,7 @@ def train(src):
         for epoch in range(cfg_train.epochs):
 
             #* TRAINING
-            loss, acc = model.train(epoch)
+            loss, acc = model.train(epoch, tg, vg)
 
             if cfg_train.stopper_metric == 'loss':
                 step_value = loss
@@ -97,4 +98,5 @@ def train(src):
             if ss == 'stop':
                 break
 
-    print("END TRAINING:", time.time() - start_training)
+    print(f"END TRAINING: {round(time.time() - start_training, 2)}s")
+    return run

@@ -4,7 +4,6 @@ from attrdict import AttrDict
 import yaml
 
 from src.paths import *
-from src.globals import DEVICE
 
 def create_folder(folder_path : str) -> None:
     """create a folder if not exists
@@ -64,12 +63,4 @@ def set_preprocessing(args: ArgumentParser) -> None:
     with open(CONFIGS / 'preprocessing.yaml', 'w') as f:
         yaml.dump(cfg_preprocessing, f)
     return
-
-def set_device(value : int) -> None:
-    """Either to use cpu or gpu (and which one).
-    """
-    if value < 0: 
-        DEVICE = 'cpu'
-    else: 
-        DEVICE = 'cuda:{}'.format(value)
     

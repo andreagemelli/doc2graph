@@ -8,7 +8,7 @@ from src.paths import *
 from src.models.setter import Doc2GraphModel
 from src.utils import get_config
 from src.models.utils import *
-from src.globals import DEVICE
+import src.globals as glb
 
 def test(args, src):
 
@@ -18,7 +18,7 @@ def test(args, src):
     run_testing = False
 
     if 'run' in args.weights:
-        run_testing = False
+        run_testing = True
         run = args.weights
         models = [f'{run}/{s}' for s in os.listdir(CHECKPOINTS / run)]
     else:
@@ -30,7 +30,7 @@ def test(args, src):
     #? test
     test_data = Doc2GraphLoader(name='TEST', src_path=src, output_dir=TEST_SAMPLES)
     test_data.get_info()
-    test_graph = dgl.batch(test_data.graphs).to(DEVICE)
+    test_graph = dgl.batch(test_data.graphs).to(glb.DEVICE)
     
     model = Doc2GraphModel(test_data.node_num_classes, test_data.edge_num_classes, test_data.get_chunks())
     
@@ -72,8 +72,6 @@ def test(args, src):
 
     if not args.test:
         feat_n, feat_e = get_features(args)
-        #? if skipping training, no need to save anything
-        model = get_config(CONFIGS / 'model')
         results = {
             'weights': best_model,
             'net-params': model.get_total_params(),
@@ -86,9 +84,13 @@ def test(args, src):
                 'weight-decay': cfg_train.weight_decay,
                 'seed': cfg_train.seed
             },
-            'RESULTS': {
-		        'f1-classes': edge_f1,
-                'nodes-f1': node_f1,
+            'NODES': {
+                'nodes-f1 [macro, micro]': node_f1,
+                'std': np.std(nodes_micro),
+                'mean': mean(nodes_micro)
+            },
+            'EDGES': {
+		        'edges-f1 [none, pairs]': edge_f1,
                 'std-pairs': np.std(edges_f1),
                 'mean-pairs': mean(edges_f1)
             }}

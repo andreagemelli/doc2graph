@@ -130,9 +130,12 @@ class InputProjector(nn.Module):
         self.chunks = in_chunks
         modules = []
         self.device = device
+        self.embedding = nn.Embedding(1000, 20)
 
         for chunk in in_chunks:
             chunk_module = []
+            if chunk == 6:
+                chunk *= 20
             chunk_module.append(nn.Linear(chunk, out_chunks))
             chunk_module.append(nn.LayerNorm(out_chunks))
             chunk_module.append(nn.ReLU())
@@ -157,6 +160,9 @@ class InputProjector(nn.Module):
             start = self.chunks[num] + sum(self.chunks[:num])
             end = start + self.chunks[num+1]
             input = h[:, start:end].to(self.device)
+            if input.shape[1] == 6: 
+                input = self.embedding(input.long())
+                input = torch.reshape(input, (input.shape[0], -1))
             mid.append(module(input))
 
         return torch.cat(mid, dim=1)

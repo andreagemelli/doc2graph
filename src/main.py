@@ -1,10 +1,10 @@
 import argparse
 
-from src.models.pau import train_pau
 from src.models.training import train
 from src.models.testing import test
 from src.paths import FUNSD_TRAIN, FUNSD_TEST
-from src.utils import set_preprocessing, set_device
+from src.utils import set_preprocessing
+from src.globals import set_device
 
 def main():
     parser = argparse.ArgumentParser(description='Training')
@@ -53,7 +53,7 @@ def main():
     if args.src_data == 'FUNSD':
         
         if not args.test:
-            train(FUNSD_TRAIN)
+            args.weights = train(FUNSD_TRAIN)
 
         test(args, FUNSD_TEST)
 

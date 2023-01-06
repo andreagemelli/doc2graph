@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from src.models.gnn import E2E
 from src.models.utils import compute_auc_mc, compute_crossentropy_loss, get_binary_accuracy_and_f1, get_f1
 from src.utils import get_config
-from src.globals import DEVICE
+import src.globals as glb
 
 
 class Doc2GraphModel():
@@ -23,6 +23,7 @@ class Doc2GraphModel():
 
         self.cfg_model = get_config('model')
         self.total_params = 0
+        self.device = glb.DEVICE
         self.model = self.__set_model(nodes, edges, chunks)
         self.get_info()
     
@@ -40,10 +41,10 @@ class Doc2GraphModel():
         print("\n### MODEL ###")
 
         edge_pred_features = int((math.log2(get_config('preprocessing').FEATURES.num_polar_bins) + nodes)*2)
-        m = E2E(nodes, edges, chunks, DEVICE,  edge_pred_features,
+        m = E2E(nodes, edges, chunks, self.device,  edge_pred_features,
                 self.cfg_model.num_layers, self.cfg_model.dropout,  self.cfg_model.out_chunks, self.cfg_model.hidden_dim,  self.cfg_model.doProject)
         
-        m.to(DEVICE)
+        m.to(self.device)
         self.total_params = sum(p.numel() for p in m.parameters() if p.requires_grad)
 
         return m
@@ -69,12 +70,12 @@ class Doc2GraphModel():
         #* TRAIN
         self.model.train()
 
-        n_scores, e_scores = self.model(tg, tg.ndata['feat'].to(DEVICE))
-        n_loss = compute_crossentropy_loss(n_scores.to(DEVICE), tg.ndata['label'].to(DEVICE))
-        e_loss = compute_crossentropy_loss(e_scores.to(DEVICE), tg.edata['label'].to(DEVICE))
+        n_scores, e_scores = self.model(tg, tg.ndata['feat'].to(self.device))
+        n_loss = compute_crossentropy_loss(n_scores.to(self.device), tg.ndata['label'].to(self.device))
+        e_loss = compute_crossentropy_loss(e_scores.to(self.device), tg.edata['label'].to(self.device))
         tot_loss = n_loss + e_loss
-        macro, micro = get_f1(n_scores, tg.ndata['label'].to(DEVICE))
-        auc = compute_auc_mc(e_scores.to(DEVICE), tg.edata['label'].to(DEVICE))
+        macro, micro = get_f1(n_scores, tg.ndata['label'].to(self.device))
+        auc = compute_auc_mc(e_scores.to(self.device), tg.edata['label'].to(self.device))
 
         self.optimizer.zero_grad()
         tot_loss.backward()
@@ -84,12 +85,12 @@ class Doc2GraphModel():
         #* VALIDATION
         self.model.eval()
         with torch.no_grad():
-            val_n_scores, val_e_scores = self.model(vg, vg.ndata['feat'].to(DEVICE))
-            val_n_loss = compute_crossentropy_loss(val_n_scores.to(DEVICE), vg.ndata['label'].to(DEVICE))
-            val_e_loss = compute_crossentropy_loss(val_e_scores.to(DEVICE), vg.edata['label'].to(DEVICE))
+            val_n_scores, val_e_scores = self.model(vg, vg.ndata['feat'].to(self.device))
+            val_n_loss = compute_crossentropy_loss(val_n_scores.to(self.device), vg.ndata['label'].to(self.device))
+            val_e_loss = compute_crossentropy_loss(val_e_scores.to(self.device), vg.edata['label'].to(self.device))
             val_tot_loss = val_n_loss + val_e_loss
-            val_macro, _ = get_f1(val_n_scores, vg.ndata['label'].to(DEVICE))
-            val_auc = compute_auc_mc(val_e_scores.to(DEVICE), vg.edata['label'].to(DEVICE))
+            val_macro, _ = get_f1(val_n_scores, vg.ndata['label'].to(self.device))
+            val_auc = compute_auc_mc(val_e_scores.to(self.device), vg.edata['label'].to(self.device))
 
         print("Epoch {:05d} | TrainLoss {:.4f} | TrainF1-MACRO {:.4f} | TrainAUC-PR {:.4f} | ValLoss {:.4f} | ValF1-MACRO {:.4f} | ValAUC-PR {:.4f} |"
         .format(epoch, tot_loss.item(), macro, auc, val_tot_loss.item(), val_macro, val_auc))
@@ -100,14 +101,14 @@ class Doc2GraphModel():
         self.model.eval()
         with torch.no_grad():
 
-            n, e= self.model(tg, tg.ndata['feat'].to(DEVICE))
-            auc = compute_auc_mc(e.to(DEVICE), tg.edata['label'].to(DEVICE))     
+            n, e= self.model(tg, tg.ndata['feat'].to(self.device))
+            auc = compute_auc_mc(e.to(self.device), tg.edata['label'].to(self.device))     
             _, epreds = torch.max(F.softmax(e, dim=1), dim=1)
             _, npreds = torch.max(F.softmax(n, dim=1), dim=1)
 
             accuracy, f1 = get_binary_accuracy_and_f1(epreds, tg.edata['label'])
             _, classes_f1 = get_binary_accuracy_and_f1(epreds, tg.edata['label'], per_class=True)
-            macro, micro = get_f1(n, tg.ndata['label'].to(DEVICE))
+            macro, micro = get_f1(n, tg.ndata['label'].to(self.device))
 
             # TODO: check these variables
             tg.edata['preds'] = epreds
