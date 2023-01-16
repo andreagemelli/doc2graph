@@ -7,9 +7,11 @@ import numpy as np
 import dgl
 from PIL import Image, ImageDraw
 import json
+import torchvision.transforms.functional as tvF
 
 from src.data.feature_builder import FeatureBuilder
 from src.data.graph_builder import GraphBuilder
+from src.globals import DEVICE
 from src.utils import get_config
 
 class Doc2GraphLoader(data.Dataset):
@@ -157,6 +159,26 @@ class Doc2GraphLoader(data.Dataset):
         """
         if len(self.feature_chunks) != self.num_mods: self.feature_chunks.pop(0)
         return self.feature_chunks
+    
+    def get_bboxs_and_imgs(self, indexes=None):
+
+        if indexes is not None:
+            graphs = [self.graphs[i] for i in indexes]
+            paths = [self.paths[i] for i in indexes]
+        else:
+            graphs = self.graphs
+            paths = self.paths
+
+        reshape = self.cfg_preprocessing.LOADER.reshape
+        imgs = []
+        for i, p in enumerate(paths):
+            img = Image.open(p)
+            w, h = img.size
+            scale = torch.tensor([reshape / w, reshape / h, reshape / w, reshape / h])
+            graphs[i].ndata['layout'] = graphs[i].ndata['layout'] * scale
+            imgs.append(tvF.to_tensor(img.resize((reshape, reshape))).unsqueeze_(0))
+    
+        return [g.ndata['layout'].to(DEVICE) for g in graphs], torch.cat(imgs).to(DEVICE)
     
     # TODO: refactor and move to GraphBuilder
     def print_graph(self, num=None, node_labels=None, labels_ids=None, name='doc_graph', bidirect=True, regions=[], preds=None) -> Image:

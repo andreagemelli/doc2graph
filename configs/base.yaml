@@ -6,12 +6,11 @@ LOADER:
     - FUNSD
     # - PAU
     # - CUSTOM
+  reshape: 900
 FEATURES:
-  add_embs: true
+  add_text: true
   add_eweights: true
-  add_fudge: false
-  add_geom: true
-  add_hist: false
+  add_layout: true
   add_visual: true
 GRAPHS:
   edge_type:

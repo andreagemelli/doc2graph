@@ -4,21 +4,19 @@ from src.models.training import train
 from src.models.testing import test
 from src.paths import FUNSD_TRAIN, FUNSD_TEST
 from src.utils import set_preprocessing
-from src.globals import set_device
+from src.globals import set_device, DEVICE
 
 def main():
     parser = argparse.ArgumentParser(description='Training')
     
     # features
-    parser.add_argument('--add-geom', '-addG', action="store_true",
-                        help="add geometrical features to nodes")
-    parser.add_argument('--add-embs', '-addT', action="store_true",
+    parser.add_argument('--add-layout', '-addL', action="store_true",
+                        help="add layout features to nodes")
+    parser.add_argument('--add-text', '-addT', action="store_true",
                         help="add textual embeddings to nodes")
-    parser.add_argument('--add-hist', '-addH', action="store_true",
-                        help="add histogram of contents to nodes")
     parser.add_argument('--add-visual', '-addV', action="store_true",
                         help="add visual features to nodes")
-    parser.add_argument('--add-eweights', '-addE', action="store_true",
+    parser.add_argument('--add-efeat', '-addE', action="store_true",
                         help="add edge features to graphs")
     # data
     parser.add_argument("--src-data", type=str, default='FUNSD',

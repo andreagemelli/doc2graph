@@ -128,7 +128,7 @@ def get_histogram(contents : list) -> list:
         
     return c_histograms
 
-def to_bin(dist :int, angle : int, b=8) -> torch.Tensor:
+def to_bin(dist : list, angle : list, b=8) -> torch.Tensor:
     """ Discretize the space into equal "bins": return a distance and angle into a number between 0 and 1.
 
     Args:
@@ -166,3 +166,11 @@ def to_bin(dist :int, angle : int, b=8) -> torch.Tensor:
 
     return torch.cat([torch.tensor(new_dist, dtype=torch.float32), torch.tensor(new_angle, dtype=torch.float32)], dim=1)
 
+def to_position(angle : list) -> torch.Tensor:
+    position = []
+    for a in angle:
+        if a <= 45 or a > 315: position.append(0)
+        elif 45 < a <= 135: position.append(1)
+        elif 135 < a <= 225: position.append(2)
+        else: position.append(3)
+    return position

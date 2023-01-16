@@ -41,8 +41,7 @@ class Doc2GraphModel():
         print("\n### MODEL ###")
 
         edge_pred_features = int((math.log2(get_config('preprocessing').FEATURES.num_polar_bins) + nodes)*2)
-        m = E2E(nodes, edges, chunks, self.device,  edge_pred_features,
-                self.cfg_model.num_layers, self.cfg_model.dropout,  self.cfg_model.out_chunks, self.cfg_model.hidden_dim,  self.cfg_model.doProject)
+        m = E2E(nodes, edges, chunks, self.device,  edge_pred_features, self.cfg_model.dropout,  self.cfg_model.out_chunks, self.cfg_model.hidden_dim,  self.cfg_model.doProject)
         
         m.to(self.device)
         self.total_params = sum(p.numel() for p in m.parameters() if p.requires_grad)
@@ -64,13 +63,12 @@ class Doc2GraphModel():
     def set_optimizer(self, lr, wd):
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, weight_decay=wd)
     
-    def train(self, epoch, tg, vg):
-        # TODO insert training with batch
+    def train(self, tg, timgs, tboxs):
 
         #* TRAIN
         self.model.train()
 
-        n_scores, e_scores = self.model(tg, tg.ndata['feat'].to(self.device))
+        n_scores, e_scores = self.model(tg, tg.ndata['feat'].to(self.device), timgs, tboxs)
         n_loss = compute_crossentropy_loss(n_scores.to(self.device), tg.ndata['label'].to(self.device))
         e_loss = compute_crossentropy_loss(e_scores.to(self.device), tg.edata['label'].to(self.device))
         tot_loss = n_loss + e_loss
@@ -82,19 +80,20 @@ class Doc2GraphModel():
         n = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1)
         self.optimizer.step()
 
-        #* VALIDATION
+        return tot_loss, auc
+        
+    
+    def validate(self, vg, vimgs, vboxs):
+
         self.model.eval()
         with torch.no_grad():
-            val_n_scores, val_e_scores = self.model(vg, vg.ndata['feat'].to(self.device))
+            val_n_scores, val_e_scores = self.model(vg, vg.ndata['feat'].to(self.device), vimgs, vboxs)
             val_n_loss = compute_crossentropy_loss(val_n_scores.to(self.device), vg.ndata['label'].to(self.device))
             val_e_loss = compute_crossentropy_loss(val_e_scores.to(self.device), vg.edata['label'].to(self.device))
             val_tot_loss = val_n_loss + val_e_loss
             val_macro, _ = get_f1(val_n_scores, vg.ndata['label'].to(self.device))
             val_auc = compute_auc_mc(val_e_scores.to(self.device), vg.edata['label'].to(self.device))
 
-        print("Epoch {:05d} | TrainLoss {:.4f} | TrainF1-MACRO {:.4f} | TrainAUC-PR {:.4f} | ValLoss {:.4f} | ValF1-MACRO {:.4f} | ValAUC-PR {:.4f} |"
-        .format(epoch, tot_loss.item(), macro, auc, val_tot_loss.item(), val_macro, val_auc))
-        
         return val_tot_loss, val_auc
     
     def test(self, tg):

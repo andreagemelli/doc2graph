@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import numpy as np
 import os
 
-from src.paths import CHECKPOINTS, RESULTS
+from src.paths import CHECKPOINTS
 from src.utils import create_folder
 
 
@@ -139,15 +139,13 @@ def get_features(args : ArgumentParser) -> Tuple[str, str]:
     feat_n = ''
     feat_e = 'false'
 
-    if args.add_geom:
-        feat_n += 'geom-'
-    if args.add_embs:
+    if args.add_layout:
+        feat_n += 'layout-'
+    if args.add_text:
         feat_n += 'text-'
     if args.add_visual:
         feat_n += 'visual-'
-    if args.add_hist:
-        feat_n += 'histogram-'
-    if args.add_eweights:
+    if args.add_efeat:
         feat_e = 'true'
         
     return feat_n, feat_e

@@ -2,6 +2,7 @@ from sklearn.model_selection import KFold
 from random import seed
 import dgl 
 import time
+from PIL import Image
 
 from src.data.dataloader import Doc2GraphLoader
 from src.paths import *
@@ -35,14 +36,12 @@ def train(src):
 
         train_index, val_index = cvs
 
-        train_graphs = [data.graphs[i] for i in train_index]
-        tg = dgl.batch(train_graphs)
-        print(glb.DEVICE)
-        tg = tg.int().to(glb.DEVICE)
+        tg_bboxs, tg_images = data.get_bboxs_and_imgs(train_index)
     
         val_graphs = [data.graphs[i] for i in val_index]
         vg = dgl.batch(val_graphs)
         vg = vg.int().to(glb.DEVICE)
+        vg_bboxs, vg_images = data.get_bboxs_and_imgs(val_index)
         
         model.set_optimizer(lr=float(cfg_train.lr), wd=float(cfg_train.weight_decay))
         # scheduler = ReduceLROnPlateau(optimizer, 'max', patience=400, min_lr=1e-3, verbose=True, factor=0.01)
@@ -51,19 +50,34 @@ def train(src):
         stopper = EarlyStopping(model, f"{run}/split{split}.pt", metric=cfg_train.stopper_metric, patience=2000)
     
         print(f"\n### TRAINING - SPLIT {split} ###")
-        print(f"-> Training samples: {tg.batch_size}")
+        print(f"-> Training samples: {len(train_index)}")
         print(f"-> Validation samples: {vg.batch_size}\n")
 
-        # im_step = 0
+        #!! NEW CODE FOR VISUAL EMBEDDER
+
+        k = len(train_index)
+        bs = cfg_train.batch_size
+        
         for epoch in range(cfg_train.epochs):
 
-            #* TRAINING
-            loss, acc = model.train(epoch, tg, vg)
+            #* TRAINING with mini-batch
+            nb = int(k/bs) + 1
+            for n in range(nb):
+                print("Batch {} - {} : {}".format(n, n*bs, min(n*bs + bs, k)), end='\r')
+                train_graphs = [data.graphs[i] for i in train_index[n*bs : min(n*bs + bs, k)]]
+                tg = dgl.batch(train_graphs)
+                tg = tg.int().to(glb.DEVICE)
+                train_tot_loss, train_auc = model.train(tg, tg_images[n*bs : min(n*bs + bs, k)], tg_bboxs[n*bs : min(n*bs + bs, k)])
+
+            val_tot_loss, val_auc = model.validate(vg, vg_images, vg_bboxs)
+
+            print("Epoch {:05d} | TrainLoss {:.4f} | TrainAUC-PR {:.4f} | ValLoss {:.4f} | ValAUC-PR {:.4f} |"
+                .format(epoch, train_tot_loss.item(), train_auc, val_tot_loss.item(), val_auc))
 
             if cfg_train.stopper_metric == 'loss':
-                step_value = loss
+                step_value = val_tot_loss
             else:
-                step_value = acc
+                step_value = val_auc
             
             ss = stopper.step(step_value)
 
