@@ -122,14 +122,22 @@ python src/main.py -addG -addT -addE -addV --gpu 0 --test --weights e2e-pau-best
 ## Cite this project
 If you want to use our code in your project(s), please cite us:
 ```
-@misc{https://doi.org/10.48550/arxiv.2208.11168,
-  doi = {10.48550/ARXIV.2208.11168},
-  url = {https://arxiv.org/abs/2208.11168},
-  author = {Gemelli, Andrea and Biswas, Sanket and Civitelli, Enrico and Lladós, Josep and Marinai, Simone},
-  keywords = {Computer Vision and Pattern Recognition (cs.CV), FOS: Computer and information sciences, FOS: Computer and information sciences},
-  title = {Doc2Graph: a Task Agnostic Document Understanding Framework based on Graph Neural Networks},
-  publisher = {arXiv},
-  year = {2022},
-  copyright = {Creative Commons Attribution Share Alike 4.0 International}
+@InProceedings{10.1007/978-3-031-25069-9_22,
+author="Gemelli, Andrea
+and Biswas, Sanket
+and Civitelli, Enrico
+and Llad{\'o}s, Josep
+and Marinai, Simone",
+editor="Karlinsky, Leonid
+and Michaeli, Tomer
+and Nishino, Ko",
+title="Doc2Graph: A Task Agnostic Document Understanding Framework Based on Graph Neural Networks",
+booktitle="Computer Vision -- ECCV 2022 Workshops",
+year="2023",
+publisher="Springer Nature Switzerland",
+address="Cham",
+pages="329--344",
+abstract="Geometric Deep Learning has recently attracted significant interest in a wide range of machine learning fields, including document analysis. The application of Graph Neural Networks (GNNs) has become crucial in various document-related tasks since they can unravel important structural patterns, fundamental in key information extraction processes. Previous works in the literature propose task-driven models and do not take into account the full power of graphs. We propose Doc2Graph, a task-agnostic document understanding framework based on a GNN model, to solve different tasks given different types of documents. We evaluated our approach on two challenging datasets for key information extraction in form understanding, invoice layout analysis and table detection. Our code is freely accessible on https://github.com/andreagemelli/doc2graph.",
+isbn="978-3-031-25069-9"
 }
 ```
