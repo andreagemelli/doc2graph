@@ -41,7 +41,9 @@ class Doc2GraphModel():
         print("\n### MODEL ###")
 
         edge_pred_features = int((math.log2(get_config('preprocessing').FEATURES.num_polar_bins) + nodes)*2)
-        m = E2E(nodes, edges, chunks, self.device,  edge_pred_features, self.cfg_model.dropout,  self.cfg_model.out_chunks, self.cfg_model.hidden_dim,  self.cfg_model.doProject)
+        m = E2E(nodes, edges, chunks, self.device,  
+                edge_pred_features, self.cfg_model.dropout,  self.cfg_model.out_chunks, 
+                self.cfg_model.hidden_dim,  self.cfg_model.doProject, self.cfg_model.doPretrain)
         
         m.to(self.device)
         self.total_params = sum(p.numel() for p in m.parameters() if p.requires_grad)
@@ -96,11 +98,11 @@ class Doc2GraphModel():
 
         return val_tot_loss, val_auc
     
-    def test(self, tg):
+    def test(self, tg, timgs, tboxs):
         self.model.eval()
         with torch.no_grad():
 
-            n, e= self.model(tg, tg.ndata['feat'].to(self.device))
+            n, e = self.model(tg, tg.ndata['feat'].to(self.device), timgs, tboxs)
             auc = compute_auc_mc(e.to(self.device), tg.edata['label'].to(self.device))     
             _, epreds = torch.max(F.softmax(e, dim=1), dim=1)
             _, npreds = torch.max(F.softmax(n, dim=1), dim=1)

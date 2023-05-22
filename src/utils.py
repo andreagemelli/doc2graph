@@ -34,8 +34,6 @@ def project_tree() -> None:
     """
     create_folder(DATA)
     create_folder(OUTPUTS)
-    create_folder(RUNS)
-    create_folder(RESULTS)
     create_folder(TRAIN_SAMPLES)
     create_folder(TEST_SAMPLES)
     create_folder(CHECKPOINTS)
@@ -49,11 +47,10 @@ def set_preprocessing(args: ArgumentParser) -> None:
     """
     with open(CONFIGS / 'base.yaml') as fileobj:
         cfg_preprocessing = dict(yaml.safe_load(fileobj))
-    cfg_preprocessing['FEATURES']['add_geom'] = args.add_geom
-    cfg_preprocessing['FEATURES']['add_embs'] = args.add_embs
-    cfg_preprocessing['FEATURES']['add_hist'] = args.add_hist
+    cfg_preprocessing['FEATURES']['add_layout'] = args.add_layout
+    cfg_preprocessing['FEATURES']['add_text'] = args.add_text
     cfg_preprocessing['FEATURES']['add_visual'] = args.add_visual
-    cfg_preprocessing['FEATURES']['add_eweights'] = args.add_eweights
+    cfg_preprocessing['FEATURES']['add_efeat'] = args.add_efeat
     cfg_preprocessing['FEATURES']['num_polar_bins'] = args.num_polar_bins
     cfg_preprocessing['LOADER']['src_data'] = args.src_data
     cfg_preprocessing['GRAPHS']['data_type'] = args.data_type

@@ -1,4 +1,4 @@
-DEVICE = 'cpu'
+DEVICE = 'cuda:0'
 def set_device(value : int) -> None:
     """Either to use cpu or gpu (and which one).
     """

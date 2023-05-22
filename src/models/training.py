@@ -47,7 +47,7 @@ def train(src):
         # scheduler = ReduceLROnPlateau(optimizer, 'max', patience=400, min_lr=1e-3, verbose=True, factor=0.01)
         # scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
         models.append(f"{run}/split{split}.pt")
-        stopper = EarlyStopping(model, f"{run}/split{split}.pt", metric=cfg_train.stopper_metric, patience=2000)
+        stopper = EarlyStopping(model, f"{run}/split{split}.pt", metric=cfg_train.stopper_metric, patience=200)
     
         print(f"\n### TRAINING - SPLIT {split} ###")
         print(f"-> Training samples: {len(train_index)}")
@@ -61,7 +61,8 @@ def train(src):
         for epoch in range(cfg_train.epochs):
 
             #* TRAINING with mini-batch
-            nb = int(k/bs) + 1
+            if k % bs != 0: nb = int(k/bs) + 1
+            else: nb = int(k/bs)
             for n in range(nb):
                 print("Batch {} - {} : {}".format(n, n*bs, min(n*bs + bs, k)), end='\r')
                 train_graphs = [data.graphs[i] for i in train_index[n*bs : min(n*bs + bs, k)]]

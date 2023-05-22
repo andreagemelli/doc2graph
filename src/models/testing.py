@@ -33,7 +33,8 @@ def test(args, src):
     test_graph = dgl.batch(test_data.graphs).to(glb.DEVICE)
     
     model = Doc2GraphModel(test_data.node_num_classes, test_data.edge_num_classes, test_data.get_chunks())
-    
+    tg_bboxs, tg_images = test_data.get_bboxs_and_imgs(range(len(test_data)))
+
     if run_testing:
         best_model = ''
         nodes_micro = []
@@ -41,7 +42,7 @@ def test(args, src):
 
         for m in models:
             model.load(CHECKPOINTS / m)
-            edge_f1, node_f1 = model.test(test_graph)
+            edge_f1, node_f1 = model.test(test_graph, tg_images, tg_bboxs)
                 
             edges_f1.append(edge_f1[1])
             nodes_micro.append(node_f1[1])
@@ -58,7 +59,7 @@ def test(args, src):
 
     print(f"\n -> Loading {best_model}")
     model.load(CHECKPOINTS / best_model)
-    edge_f1, node_f1 = model.test(test_graph)
+    edge_f1, node_f1 = model.test(test_graph, tg_images, tg_bboxs)
 
     # ################* STEP 4: RESULTS ################
     print("\n### BEST RESULTS ###")

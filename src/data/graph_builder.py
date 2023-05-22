@@ -22,29 +22,29 @@ class GraphBuilder():
         self.edge_type = self.cfg_preprocessing.GRAPHS.edge_type
         self.data_type = self.cfg_preprocessing.GRAPHS.data_type
         self.node_granularity = self.cfg_preprocessing.GRAPHS.node_granularity
+        self.src_data = self.cfg_preprocessing.LOADER.src_data
         random.seed = 42
         return
     
-    def get_graph(self, src_path : str, src_data : str) -> Tuple[list, list, list, list]:
+    def get_graph(self, src_path : str = '') -> Tuple[list, list, list, list]:
         """ Given the source, it returns a graph
 
         Args:
             src_path (str) : path to source data
-            src_data (str) : either FUNSD, PAU or CUSTOM
         
         Returns:
             tuple (lists) : graphs, nodes and edge labels, features
         """
         
-        if src_data == 'FUNSD':
+        if self.src_data == 'FUNSD':
             return self.__fromFUNSD(src_path)
-        elif src_data == 'PAU':
+        elif self.src_data == 'PAU':
             return self.__fromPAU(src_path)
-        elif src_data == 'CUSTOM':
+        elif self.src_data == 'CUSTOM':
             if self.data_type == 'img':
-                return self.__fromIMG()
+                return self.__fromIMG(src_path)
             elif self.data_type == 'pdf':
-                return self.__fromPDF()
+                return self.__fromPDF(src_path)
             else:
                 raise Exception('GraphBuilder exception: data type invalid. Choose from ["img", "pdf"]')
         else:
@@ -183,8 +183,10 @@ class GraphBuilder():
 
         return [e[0] for e in edges], [e[1] for e in edges]
 
-    def __fromIMG():
-        #TODO: dev from IMG import of graphs
+    def __fromIMG(self, img):
+        if isinstance(img, str):
+            img = Image.open(img)
+        img.save('prova.png')
         return
     
     def __fromPDF():

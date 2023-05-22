@@ -5,6 +5,7 @@ import math
 import torch.nn.functional as F
 from dgl import DGLGraph
 import torchvision
+import dgl
 
 from src.globals import DEVICE
 
@@ -20,7 +21,8 @@ class E2E(nn.Module):
                        dropout, 
                        out_chunks, 
                        hidden_dim, 
-                       doProject=True):
+                       doProject=True,
+                       doPretrain=False):
 
         super().__init__()
 
@@ -35,14 +37,16 @@ class E2E(nn.Module):
         self.message_passing = nn.ModuleList()
         self.message_passing = GcnSAGELayer(m_hidden, m_hidden, F.relu, 0.)
 
-        # Define edge predictor layer
-        self.edge_pred = MLPPredictor_E2E(m_hidden, hidden_dim, edge_classes, dropout,  edge_pred_features)
+        if not doPretrain:
+            # Define edge predictor layer
+            self.edge_pred = MLPPredictor_E2E(m_hidden, hidden_dim, edge_classes, dropout,  edge_pred_features)
 
-        # Define node predictor layer
-        node_pred = []
-        node_pred.append(nn.Linear(m_hidden, node_classes))
-        node_pred.append(nn.LayerNorm(node_classes))
-        self.node_pred = nn.Sequential(*node_pred)
+            # Define node predictor layer
+            node_pred = []
+            node_pred.append(nn.Linear(m_hidden, node_classes))
+            node_pred.append(nn.LayerNorm(node_classes))
+            self.node_pred = nn.Sequential(*node_pred)
+
 
     def forward(self, g, h, img=None, bboxs=None):
         
@@ -65,22 +69,17 @@ class GcnSAGELayer(nn.Module):
                  out_feats,
                  activation,
                  dropout,
-                 bias=True,
-                 use_pp=False,
-                 use_lynorm=True):
+                 do_pretrain=False):
         super(GcnSAGELayer, self).__init__()
-        self.linear = nn.Linear(2 * in_feats, out_feats, bias=bias)
+        self.linear = nn.Linear(5 * in_feats, out_feats)
         self.activation = activation
-        self.use_pp = use_pp
         if dropout:
             self.dropout = nn.Dropout(p=dropout)
         else:
             self.dropout = 0.
-        if use_lynorm:
-            self.lynorm = nn.LayerNorm(out_feats, elementwise_affine=True)
-        else:
-            self.lynorm = lambda x: x
+        self.lynorm = nn.LayerNorm(out_feats, elementwise_affine=True)
         self.reset_parameters()
+        self.do_pretrain = do_pretrain
 
     def reset_parameters(self):
         stdv = 1. / math.sqrt(self.linear.weight.size(1))
@@ -88,49 +87,28 @@ class GcnSAGELayer(nn.Module):
         if self.linear.bias is not None:
             self.linear.bias.data.uniform_(-stdv, stdv)
 
-    # def forward(self, g : DGLGraph, h):
-    #     g = g.local_var()
-    #     g.ndata['h'] = h
-    #     positions = g.edata['position']
-
-    #     right = (positions == 0).nonzero(as_tuple=True)[0].tolist()
-    #     g.send_and_recv(right, fn.u_mul_e('h', 'dist', 'm'), fn.sum(msg='m', out='r'))
-    #     r = g.ndata.pop('r')
-
-    #     bottom = (positions == 1).nonzero(as_tuple=True)[0].tolist()
-    #     g.send_and_recv(bottom, fn.u_mul_e('h', 'dist', 'm'), fn.sum(msg='m', out='b'))
-    #     b = g.ndata.pop('b')
-
-    #     left = (positions == 2).nonzero(as_tuple=True)[0].tolist()
-    #     g.send_and_recv(left, fn.u_mul_e('h', 'dist', 'm'), fn.sum(msg='m', out='l'))
-    #     l = g.ndata.pop('l')
-
-    #     top = (positions == 0).nonzero(as_tuple=True)[0].tolist()
-    #     g.send_and_recv(top, fn.u_mul_e('h', 'dist', 'm'), fn.sum(msg='m', out='t'))
-    #     t = g.ndata.pop('t')
-        
-    #     h = torch.cat((h, r, b, l, t), dim=1)
-
-    #     if self.dropout:
-    #         h = self.dropout(h)
-
-    #     h = self.linear(h)
-    #     h = self.lynorm(h)
-    #     if self.activation:
-    #         h = self.activation(h)
-
-    #     return h
-
     def forward(self, g : DGLGraph, h):
         g = g.local_var()
+        g.ndata['h'] = h
+        positions = g.edata['position']
+
+        right = (positions == 0).nonzero(as_tuple=True)[0].tolist()
+        g.send_and_recv(right, fn.u_mul_e('h', 'dist', 'm'), fn.sum(msg='m', out='r'))
+        r = g.ndata.pop('r')
+
+        bottom = (positions == 1).nonzero(as_tuple=True)[0].tolist()
+        g.send_and_recv(bottom, fn.u_mul_e('h', 'dist', 'm'), fn.sum(msg='m', out='b'))
+        b = g.ndata.pop('b')
+
+        left = (positions == 2).nonzero(as_tuple=True)[0].tolist()
+        g.send_and_recv(left, fn.u_mul_e('h', 'dist', 'm'), fn.sum(msg='m', out='l'))
+        l = g.ndata.pop('l')
+
+        top = (positions == 0).nonzero(as_tuple=True)[0].tolist()
+        g.send_and_recv(top, fn.u_mul_e('h', 'dist', 'm'), fn.sum(msg='m', out='t'))
+        t = g.ndata.pop('t')
         
-        if not self.use_pp:
-            norm = g.ndata['norm']
-            g.ndata['h'] = h
-            g.update_all(fn.u_mul_e('h', 'dist', 'm'),
-                        fn.sum(msg='m', out='h'))
-            ah = g.ndata.pop('h')
-            h = self.concat(h, ah, norm)
+        h = torch.cat((h, r, b, l, t), dim=1)
 
         if self.dropout:
             h = self.dropout(h)
@@ -139,7 +117,33 @@ class GcnSAGELayer(nn.Module):
         h = self.lynorm(h)
         if self.activation:
             h = self.activation(h)
+
+        if self.do_pretrain:
+            with g.local_scope():
+                g.ndata['h'] = h
+                h = dgl.mean_nodes(g, 'h')
+
         return h
+
+    # def forward(self, g : DGLGraph, h):
+    #     g = g.local_var()
+        
+    #     if not self.use_pp:
+    #         norm = g.ndata['norm']
+    #         g.ndata['h'] = h
+    #         g.update_all(fn.u_mul_e('h', 'dist', 'm'),
+    #                     fn.sum(msg='m', out='h'))
+    #         ah = g.ndata.pop('h')
+    #         h = self.concat(h, ah, norm)
+
+    #     if self.dropout:
+    #         h = self.dropout(h)
+
+    #     h = self.linear(h)
+    #     h = self.lynorm(h)
+    #     if self.activation:
+    #         h = self.activation(h)
+    #     return h
 
     def concat(self, h, ah, norm):
         ah = ah * norm
