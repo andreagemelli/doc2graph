@@ -33,7 +33,7 @@ class SetModel():
         """
         return self.total_params
 
-    def get_model(self, nodes : int, edges : int, chunks : list) -> nn.Module:
+    def get_model(self, nodes : int, edges : int, chunks : list, verbatim : bool = True) -> nn.Module:
         """Return the DGL model defined in the setting file
 
         Args:
@@ -64,7 +64,7 @@ class SetModel():
         self.total_params = sum(p.numel() for p in m.parameters() if p.requires_grad)
         print(f"-> Total params: {self.total_params}")
         print("-> Device: " + str(next(m.parameters()).is_cuda) + "\n")
-        print(m)
+        if verbatim: print(m)
 
         return m
 

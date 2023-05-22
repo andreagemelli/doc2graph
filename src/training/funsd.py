@@ -206,7 +206,7 @@ def e2e(args):
     model.eval()
     with torch.no_grad():
 
-        n, e= model(test_graph, test_graph.ndata['feat'].to(device))
+        n, e = model(test_graph, test_graph.ndata['feat'].to(device))
         auc = compute_auc_mc(e.to(device), test_graph.edata['label'].to(device))
         
         _, epreds = torch.max(F.softmax(e, dim=1), dim=1)

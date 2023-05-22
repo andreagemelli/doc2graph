@@ -8,6 +8,7 @@ import random
 import numpy as np
 from tqdm import tqdm
 import xml.etree.ElementTree as ET
+import easyocr
 
 from src.data.preprocessing import load_predictions
 from src.data.utils import polar
@@ -42,7 +43,7 @@ class GraphBuilder():
             return self.__fromPAU(src_path)
         elif src_data == 'CUSTOM':
             if self.data_type == 'img':
-                return self.__fromIMG()
+                return self.__fromIMG(src_path)
             elif self.data_type == 'pdf':
                 return self.__fromPDF()
             else:
@@ -183,9 +184,39 @@ class GraphBuilder():
 
         return [e[0] for e in edges], [e[1] for e in edges]
 
-    def __fromIMG():
-        #TODO: dev from IMG import of graphs
-        return
+    def __fromIMG(self, paths : list):
+        
+        graphs, node_labels, edge_labels = list(), list(), list()
+        features = {'paths': paths, 'texts': [], 'boxs': []}
+
+        for path in paths:
+            reader = easyocr.Reader(['en']) #! TODO: in the future, handle multilanguage!
+            result = reader.readtext(path, paragraph=True)
+            img = Image.open(path).convert('RGB')
+            draw = ImageDraw.Draw(img)
+            boxs, texts = list(), list()
+
+            for r in result:
+                box = [int(r[0][0][0]), int(r[0][0][1]), int(r[0][2][0]), int(r[0][2][1])]
+                draw.rectangle(box, outline='red', width=3)
+                boxs.append(box)
+                texts.append(r[1])
+
+            features['boxs'].append(boxs)
+            features['texts'].append(texts)
+            img.save('prova.png')
+
+            if self.edge_type == 'fully':
+                u, v = self.fully_connected(range(len(boxs)))
+            elif self.edge_type == 'knn': 
+                u,v = self.__knn(Image.open(path).size, boxs)
+            else:
+                raise Exception('Other edge types still under development.')
+
+            g = dgl.graph((torch.tensor(u), torch.tensor(v)), num_nodes=len(boxs), idtype=torch.int32)
+            graphs.append(g)
+
+        return graphs, node_labels, edge_labels, features
     
     def __fromPDF():
         #TODO: dev from PDF import of graphs
