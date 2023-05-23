@@ -106,7 +106,7 @@ class GraphBuilder():
             v.extend([i for i in range(len(ids)) if i != id])
         return u, v
     
-    def __knn(self, size : tuple, bboxs : list, k = 10) -> Tuple[list, list]:
+    def knn_connection(self, size : tuple, bboxs : list, k = 10) -> Tuple[list, list]:
         """ Given a list of bounding boxes, find for each of them their k nearest ones.
 
         Args:
@@ -183,7 +183,7 @@ class GraphBuilder():
                 else: break
 
         return [e[0] for e in edges], [e[1] for e in edges]
-
+    
     def __fromIMG(self, paths : list):
         
         graphs, node_labels, edge_labels = list(), list(), list()
@@ -209,7 +209,7 @@ class GraphBuilder():
             if self.edge_type == 'fully':
                 u, v = self.fully_connected(range(len(boxs)))
             elif self.edge_type == 'knn': 
-                u,v = self.__knn(Image.open(path).size, boxs)
+                u,v = self.knn_connection(Image.open(path).size, boxs)
             else:
                 raise Exception('Other edge types still under development.')
 
@@ -295,7 +295,7 @@ class GraphBuilder():
             if self.edge_type == 'fully':
                 u, v = self.fully_connected(range(len(tokens_bbox)))
             elif self.edge_type == 'knn': 
-                u,v = self.__knn(Image.open(os.path.join(src, image)).size, tokens_bbox)
+                u,v = self.knn_connection(Image.open(os.path.join(src, image)).size, tokens_bbox)
             else:
                 raise Exception('Other edge types still under development.')
             
@@ -357,7 +357,7 @@ class GraphBuilder():
                 if self.edge_type == 'fully':
                     u, v = self.fully_connected(range(len(boxs)))
                 elif self.edge_type == 'knn': 
-                    u,v = self.__knn(Image.open(img_path).size, boxs)
+                    u,v = self.knn_connection(Image.open(img_path).size, boxs)
                 else:
                     raise Exception('GraphBuilder exception: Other edge types still under development.')
                 
@@ -439,7 +439,7 @@ class GraphBuilder():
                 if self.edge_type == 'fully':
                     u, v = self.fully_connected(range(len(features['boxs'][f])))
                 elif self.edge_type == 'knn': 
-                    u,v = self.__knn(Image.open(img_path).size, features['boxs'][f])
+                    u,v = self.knn_connection(Image.open(img_path).size, features['boxs'][f])
                 else:
                     raise Exception('GraphBuilder exception: Other edge types still under development.')
                 

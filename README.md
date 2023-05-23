@@ -1,5 +1,7 @@
 # <p align=center>`Doc2Graph`</p> 
 
+![model](model.png)
+
 [![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/doc2graph-a-task-agnostic-document/entity-linking-on-funsd)](https://paperswithcode.com/sota/entity-linking-on-funsd?p=doc2graph-a-task-agnostic-document) [![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/doc2graph-a-task-agnostic-document/semantic-entity-labeling-on-funsd)](https://paperswithcode.com/sota/semantic-entity-labeling-on-funsd?p=doc2graph-a-task-agnostic-document)
 
 ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54) ![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?style=for-the-badge&logo=PyTorch&logoColor=white)
@@ -16,12 +18,22 @@ The model and pipeline aims at being task-agnostic on the domain of Document Und
 - [ ] Let the user train Doc2Graph over private / other datasets using our dataloader
 - [ ] Transform Doc2Graph into a PyPI package
 
-Roadmap:
+Index:
 - [`Doc2Graph`](#doc2graph)
+  - [News!](#news)
   - [Environment Setup](#environment-setup)
   - [Training](#training)
   - [Testing](#testing)
   - [Cite this project](#cite-this-project)
+
+---
+## News!
+- 🔥 Added **inference** method: you can now use Doc2Graph directly on your documents simply passing a path to them! <br> This call will output an image with the connected entities and a json / dictionary with all the useful information you need! 🤗
+```
+python src/main.py -addG -addT -addE -addV --gpu 0 --weights e2e-funsd-best.pt --inference --docs /path/to/document
+```
+  
+- 🔥 Added **tutorial** folder: get to know how to use Doc2Graph from the tutorial notebooks!
 
 ## Environment Setup
 Setup the initial conda environment
@@ -72,11 +84,11 @@ python src/main.py [SETTINGS] --gpu 0 --test --weights *.pt
 The project can be customized either changing directly `configs/base.yaml` file or providing these flags when calling `src/main.py`.
 
 **Features**
- - --add-geom: True / False (to add positional features to graph nodes)
- - --add-embs: True / False (to add textual features to graph nodes)
- - --add-hist: True / False (to add visual features to graph nodes)
- - --add-visual: True / False (to add visual features to graph nodes)
- - --add-eweights: True / False (to add polar relative coordinates between nodes to graph edges)
+ - --add-geom: bool (to add positional features to graph nodes)
+ - --add-embs: bool (to add textual features to graph nodes)
+ - --add-hist: bool (to add visual features to graph nodes)
+ - --add-visual: bool (to add visual features to graph nodes)
+ - --add-eweights: bool (to add polar relative coordinates between nodes to graph edges)
 
 **Data**
  - --src-data: string [FUNSD, PAU or CUSTOM] (CUSTOM still under dev)
@@ -86,6 +98,10 @@ The project can be customized either changing directly `configs/base.yaml` file 
  - --edge-type: string [fully, knn] (to change the kind of connectivity)
  - --node-granularity: string [gt, yolo, ocr] (choose the granularity of nodes to be used, gt (if given), ocr (words) or yolo (entities))
  - --num-polar-bins: int [Default 8] (number of bins into which discretize the space for edge polar features. It must be a power of 2)
+
+ **Inference (only for KiE)**
+ - --inference: bool (run inference on given document/s path/s)
+ - --docs: list (list your absolute path to your document)
 
 Change directly `configs/train.yaml` for training settings or pass these flags to `src/main.py`. To create your own model (changing hyperparams) copy `configs/models/*.yaml`. 
 
