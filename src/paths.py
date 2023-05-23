@@ -20,6 +20,7 @@ TEST_SAMPLES = OUTPUTS / 'test_samples'
 TRAINING = ROOT / 'src' / 'training'
 MODELS = ROOT / 'src' / 'models'
 CHECKPOINTS = MODELS / 'checkpoints'
+INFERENCE = ROOT / 'inference'
 
 # FUNSD
 FUNSD_TRAIN = DATA / 'FUNSD' / 'training_data'

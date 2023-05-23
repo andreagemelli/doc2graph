@@ -15,7 +15,7 @@ from src.utils import get_config
 
 class FeatureBuilder():
 
-    def __init__(self, d : int):
+    def __init__(self, d : int = 'cpu'):
         """FeatureBuilder constructor
 
         Args:

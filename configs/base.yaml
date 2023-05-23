@@ -5,7 +5,7 @@ LOADER:
   src_data:
     - FUNSD
     # - PAU
-    # - CUSTOM
+    # - CUSTOM
 FEATURES:
   add_embs: true
   add_eweights: true

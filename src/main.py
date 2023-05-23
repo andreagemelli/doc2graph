@@ -1,8 +1,9 @@
 import argparse
 
 from src.data.download import get_data
+from src.inference import inference
 from src.training.funsd import train_funsd
-from src.utils import project_tree, set_preprocessing
+from src.utils import create_folder, project_tree, set_preprocessing
 from src.training.pau import train_pau
 
 def main():
@@ -45,6 +46,12 @@ def main():
                         help="skip training")
     parser.add_argument('--weights', '-w', nargs='+', type=str, default=None,
                         help="provide a weights file relative path if testing")
+    
+    # inference
+    parser.add_argument('--inference', action="store_true",
+                        help="use the model to predict on new, unseen examples")
+    parser.add_argument('--docs', nargs='+', type=str, default=None,
+                        help="provide documents to do inference on them")
          
     args = parser.parse_args()
     print(args)
@@ -56,7 +63,10 @@ def main():
 
     else:
         set_preprocessing(args)
-        if args.src_data == 'FUNSD':
+        if args.inference:
+            create_folder('inference')
+            inference(args.weights, args.docs, args.gpu)
+        elif args.src_data == 'FUNSD':
             if args.test and args.weights == None:
                 raise Exception("Main exception: Provide a weights file relative path! Or train a model first.")
             train_funsd(args)
