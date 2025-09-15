@@ -1,1 +1,1 @@
-from .model import Unet
+from .model import Unet as Unet
