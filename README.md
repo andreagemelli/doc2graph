@@ -36,23 +36,38 @@ python src/main.py -addG -addT -addE -addV --gpu 0 --weights e2e-funsd-best.pt -
 - 🔥 Added **tutorial** folder: get to know how to use Doc2Graph from the tutorial notebooks!
 
 ## Environment Setup
-Setup the initial conda environment
 
+### Prerequisites
+- Python 3.9 or higher
+- [uv](https://docs.astral.sh/uv/) package manager
+
+### Installation
+
+1. **Install uv** (if not already installed):
+```bash
+pip install uv
 ```
-conda create -n doc2graph python=3.9 ipython cudatoolkit=11.3 -c anaconda &&
-conda activate doc2graph &&
+
+2. **Clone and setup the project**:
+```bash
+git clone https://github.com/andreagemelli/doc2graph.git
 cd doc2graph
 ```
 
-Then, install [setuptools-git-versioning](https://pypi.org/project/setuptools-git-versioning/) and doc2graph package itself. The following has been tested only on linux: for different OS installations refer directly to [PyTorch](https://pytorch.org/get-started/previous-versions/) and [DGL](https://www.dgl.ai/pages/start.html) original documentation.
+3. **Install dependencies and the package**:
+```bash
+uv sync
+```
 
+4. **Install additional dependencies** (PyTorch with CUDA support and spaCy model):
+```bash
+# For CUDA 11.3 (adjust version as needed)
+uv add torch==1.11.0+cu113 torchvision==0.12.0+cu113 torchaudio==0.11.0 --index-url https://download.pytorch.org/whl/cu113
+uv add dgl-cu113 --index-url https://data.dgl.ai/wheels/repo.html
+uv add https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.3.0/en_core_web_lg-3.3.0.tar.gz
 ```
-pip install torch==1.11.0+cu113 torchvision==0.12.0+cu113 torchaudio==0.11.0 --extra-index-url &&
-https://download.pytorch.org/whl/cu113 &&
-pip install dgl-cu113 dglgo -f https://data.dgl.ai/wheels/repo.html &&
-pip install setuptools-git-versioning && pip install -e . &&
-pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.3.0/en_core_web_lg-3.3.0.tar.gz
-```
+
+**Note**: For different OS installations or CUDA versions, refer to [PyTorch](https://pytorch.org/get-started/previous-versions/) and [DGL](https://www.dgl.ai/pages/start.html) documentation.
 
 Finally, create the project folder structure and download data:
 
