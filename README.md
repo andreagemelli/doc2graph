@@ -98,7 +98,7 @@ uv add dgl-cu118 --index-url https://data.dgl.ai/wheels/repo.html
 Finally, create the project folder structure and download data:
 
 ```
-python doc2graph/main.py --init
+python doc2graph.main --init
 ```
 The script will download and setup:
 - FUNSD and the 'adjusted_annotations' for FUNSD[^1] are given by the work of[^3].
@@ -116,13 +116,13 @@ You can download our model checkpoints [here](https://drive.google.com/file/d/15
 ## Training
 1. To train our **Doc2Graph** model (using CPU) use:
 ```
-python doc2graph/main.py [SETTINGS]
+python doc2graph.main [SETTINGS]
 ```
 2. Instead, to test a trained **Doc2Graph** model (using GPU) [weights can be one or more file]:
 ```
-python doc2graph/main.py [SETTINGS] --gpu 0 --test --weights *.pt
+python doc2graph.main [SETTINGS] --gpu 0 --test --weights *.pt
 ```
-The project can be customized either changing directly `configs/base.yaml` file or providing these flags when calling `doc2graph/main.py`.
+The project can be customized either changing directly `configs/base.yaml` file or providing these flags when calling `doc2graph.main`.
 
 **Features**
  - --add-geom: bool (to add positional features to graph nodes)
@@ -144,7 +144,7 @@ The project can be customized either changing directly `configs/base.yaml` file 
  - --inference: bool (run inference on given document/s path/s)
  - --docs: list (list your absolute path to your document)
 
-Change directly `configs/train.yaml` for training settings or pass these flags to `doc2graph/main.py`. To create your own model (changing hyperparams) copy `configs/models/*.yaml`. 
+Change directly `configs/train.yaml` for training settings or pass these flags to `doc2graph.main`. To create your own model (changing hyperparams) copy `configs/models/*.yaml`. 
 
 **Training/Testing**
 - --model: string [e2e, edge, gcn] (which model to use, which yaml file to load)
@@ -160,19 +160,19 @@ You can use our pretrained models over the test sets of FUNSD[^1] and Pau Riba's
 
 **E2E-FUNSD-GT**:
 ```
-python doc2graph/main.py -addG -addT -addE -addV --gpu 0 --test --weights e2e-funsd-best.pt
+python doc2graph.main -addG -addT -addE -addV --gpu 0 --test --weights e2e-funsd-best.pt
 ```
 
 **E2E-FUNSD-YOLO**:
 ```
-python doc2graph/main.py -addG -addT -addE -addV --gpu 0 --test --weights e2e-funsd-best.pt --node-granularity yolo
+python doc2graph.main -addG -addT -addE -addV --gpu 0 --test --weights e2e-funsd-best.pt --node-granularity yolo
 ```
 
 2. on Pau Riba's dataset, we were able to perform both Layout Analysis and Table Detection
 
 **E2E-PAU**:
 ```
-python doc2graph/main.py -addG -addT -addE -addV --gpu 0 --test --weights e2e-pau-best.pt --src-data PAU --edge-type knn
+python doc2graph.main -addG -addT -addE -addV --gpu 0 --test --weights e2e-pau-best.pt --src-data PAU --edge-type knn
 ```
   
 ---
