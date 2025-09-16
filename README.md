@@ -15,6 +15,7 @@ The model and pipeline aims at being task-agnostic on the domain of Document Und
   - [x] Table Detection
 - [ ] Let the user train Doc2Graph over private / other datasets using our dataloader
 - [ ] Publish Doc2Graph to PyPI for easy installation
+- [ ] Retrain Doc2Graph in a new and extended version
 
 ## Quick Start
 

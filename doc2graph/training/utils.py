@@ -242,13 +242,26 @@ def get_features(args: ArgumentParser) -> Tuple[str, str]:
 
 
 def compute_crossentropy_loss(scores: torch.Tensor, labels: torch.Tensor):
+    # Get the number of classes from the scores tensor shape
+    num_classes = scores.shape[1]
+    
+    # Get unique classes present in the current batch
+    unique_classes = np.unique(labels.cpu().numpy())
+    
+    # Compute class weights only for classes present in the batch
     w = class_weight.compute_class_weight(
         class_weight="balanced",
-        classes=np.unique(labels.cpu().numpy()),
+        classes=unique_classes,
         y=labels.cpu().numpy(),
     )
+    
+    # Create a full weight tensor for all classes, using 1.0 for missing classes
+    full_weights = np.ones(num_classes)
+    for i, class_id in enumerate(unique_classes):
+        full_weights[class_id] = w[i]
+    
     return torch.nn.CrossEntropyLoss(
-        weight=torch.tensor(w, dtype=torch.float32).to("cuda:0")
+        weight=torch.tensor(full_weights, dtype=torch.float32).to(scores.device)
     )(scores, labels)
 
 
