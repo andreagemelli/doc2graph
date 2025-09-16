@@ -17,6 +17,7 @@ The model and pipeline aims at being task-agnostic on the domain of Document Und
 - [ ] Publish Doc2Graph to PyPI for easy installation
 - [ ] Retrain Doc2Graph in a new and extended version
 
+
 ## Quick Start
 
 Get up and running with Doc2Graph in minutes:
@@ -199,3 +200,15 @@ abstract="Geometric Deep Learning has recently attracted significant interest in
 isbn="978-3-031-25069-9"
 }
 ```
+
+---
+
+## ⚠️ Security Notice
+
+**DGL Vulnerability**: This project uses `dgl>=1.1.3,<2.0.0` which has a known security vulnerability related to RPC pickle deserialization (GHSA-3x5x-fw77-g54c). 
+
+**Workaround**: When running DGL distributed training and inference (DistDGL), ensure you do not assign public IPs to any instance in the cluster.
+
+**Resolution**: This vulnerability will be addressed in future versions of the project when a compatible DGL version with the security fix becomes available.
+
+For more details, see the [DGL security advisory](https://github.com/dmlc/dgl/security/advisories/GHSA-3x5x-fw77-g54c).
