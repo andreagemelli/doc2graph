@@ -16,7 +16,27 @@ The model and pipeline aims at being task-agnostic on the domain of Document Und
   - [x] Business documents Layout Analysis
   - [x] Table Detection
 - [ ] Let the user train Doc2Graph over private / other datasets using our dataloader
-- [ ] Transform Doc2Graph into a PyPI package
+- [ ] Publish Doc2Graph to PyPI for easy installation
+
+## Quick Start
+
+Get up and running with Doc2Graph in minutes:
+
+```bash
+# Clone and install
+git clone https://github.com/andreagemelli/doc2graph.git
+cd doc2graph
+uv sync
+uv pip install -e .
+
+# Initialize the project (downloads datasets)
+uv run doc2graph.main --init
+
+# Run inference on a document
+uv run python -m doc2graph.main -addG -addT -addE -addV --weights e2e-funsd-best.pt --inference --docs /path/to/your/image.png
+```
+
+Check out the [tutorial notebook](tutorial/kie.ipynb) for a complete walkthrough!
 
 Index:
 - [`Doc2Graph`](#doc2graph)
@@ -30,7 +50,7 @@ Index:
 ## News!
 - 🔥 Added **inference** method: you can now use Doc2Graph directly on your documents simply passing a path to them! <br> This call will output an image with the connected entities and a json / dictionary with all the useful information you need! 🤗
 ```
-python src/main.py -addG -addT -addE -addV --gpu 0 --weights e2e-funsd-best.pt --inference --docs /path/to/document
+uv run python -m doc2graph.main -addG -addT -addE -addV --weights e2e-funsd-best.pt --inference --docs /path/to/your/image.png
 ```
   
 - 🔥 Added **tutorial** folder: get to know how to use Doc2Graph from the tutorial notebooks!
@@ -38,7 +58,7 @@ python src/main.py -addG -addT -addE -addV --gpu 0 --weights e2e-funsd-best.pt -
 ## Environment Setup
 
 ### Prerequisites
-- Python 3.9 or higher
+- Python 3.8-3.11 (recommended: 3.10)
 - [uv](https://docs.astral.sh/uv/) package manager
 
 ### Installation
@@ -54,17 +74,25 @@ git clone https://github.com/andreagemelli/doc2graph.git
 cd doc2graph
 ```
 
-3. **Install dependencies and the package**:
+3. **Install the package in development mode**:
 ```bash
 uv sync
+uv pip install -e .
 ```
 
-4. **Install additional dependencies** (PyTorch with CUDA support and spaCy model):
+This will:
+- Install all dependencies with compatible versions
+- Install the `doc2graph` package in development mode
+- Set up the virtual environment with Python 3.10
+
+### Additional Setup (Optional)
+
+For GPU acceleration, you may need to install CUDA-specific versions of PyTorch and DGL:
+
 ```bash
-# For CUDA 11.3 (adjust version as needed)
-uv add torch==1.11.0+cu113 torchvision==0.12.0+cu113 torchaudio==0.11.0 --index-url https://download.pytorch.org/whl/cu113
-uv add dgl-cu113 --index-url https://data.dgl.ai/wheels/repo.html
-uv add https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.3.0/en_core_web_lg-3.3.0.tar.gz
+# For CUDA 11.8 (adjust version as needed)
+uv add torch==1.13.1+cu118 torchvision==0.14.1+cu118 --index-url https://download.pytorch.org/whl/cu118
+uv add dgl-cu118 --index-url https://data.dgl.ai/wheels/repo.html
 ```
 
 **Note**: For different OS installations or CUDA versions, refer to [PyTorch](https://pytorch.org/get-started/previous-versions/) and [DGL](https://www.dgl.ai/pages/start.html) documentation.
@@ -72,11 +100,11 @@ uv add https://github.com/explosion/spacy-models/releases/download/en_core_web_l
 Finally, create the project folder structure and download data:
 
 ```
-python src/main.py --init
+python doc2graph/main.py --init
 ```
 The script will download and setup:
 - FUNSD and the 'adjusted_annotations' for FUNSD[^1] are given by the work of[^3].
-- The yolo detection bbox described in the paper (If you want to use YOLOv5-small to detect entities, script in `notebooks/YOLO.ipynb`, refer to [their github](https://github.com/ultralytics/yolov5) for the installation. Clone the repository into `src/models/yolov5`).
+- The yolo detection bbox described in the paper (If you want to use YOLOv5-small to detect entities, script in `notebooks/YOLO.ipynb`, refer to [their github](https://github.com/ultralytics/yolov5) for the installation. Clone the repository into `doc2graph/models/yolov5`).
 - The Pau Riba's[^2] dataset with our train / test split.
 
 [^1]: G. Jaume et al., FUNSD: A Dataset for Form Understanding in Noisy Scanned Documents, ICDARW 2019
@@ -84,19 +112,19 @@ The script will download and setup:
 [^3]: Hieu M. Vu et al., REVISING FUNSD DATASET FOR KEY-VALUE DETECTION IN DOCUMENT IMAGES, arXiv preprint 2020
 
 **Checkpoints**
-You can download our model checkpoints [here](https://drive.google.com/file/d/15jKWYLTcb8VwE7XY_jcRvZTAmqy_ElJ_/view?usp=sharing). Place them into `src/models/checkpoints`.
+You can download our model checkpoints [here](https://drive.google.com/file/d/15jKWYLTcb8VwE7XY_jcRvZTAmqy_ElJ_/view?usp=sharing). Place them into `doc2graph/models/checkpoints`.
 
 ---
 ## Training
 1. To train our **Doc2Graph** model (using CPU) use:
 ```
-python src/main.py [SETTINGS]
+python doc2graph/main.py [SETTINGS]
 ```
 2. Instead, to test a trained **Doc2Graph** model (using GPU) [weights can be one or more file]:
 ```
-python src/main.py [SETTINGS] --gpu 0 --test --weights *.pt
+python doc2graph/main.py [SETTINGS] --gpu 0 --test --weights *.pt
 ```
-The project can be customized either changing directly `configs/base.yaml` file or providing these flags when calling `src/main.py`.
+The project can be customized either changing directly `configs/base.yaml` file or providing these flags when calling `doc2graph/main.py`.
 
 **Features**
  - --add-geom: bool (to add positional features to graph nodes)
@@ -118,11 +146,11 @@ The project can be customized either changing directly `configs/base.yaml` file 
  - --inference: bool (run inference on given document/s path/s)
  - --docs: list (list your absolute path to your document)
 
-Change directly `configs/train.yaml` for training settings or pass these flags to `src/main.py`. To create your own model (changing hyperparams) copy `configs/models/*.yaml`. 
+Change directly `configs/train.yaml` for training settings or pass these flags to `doc2graph/main.py`. To create your own model (changing hyperparams) copy `configs/models/*.yaml`. 
 
 **Training/Testing**
 - --model: string [e2e, edge, gcn] (which model to use, which yaml file to load)
-- --gpu: int [Default -1] (which GPU to use. Set -1 to use CPU(
+- --gpu: int [Default -1] (which GPU to use. Set -1 to use CPU)
 - --test: true / false (skip training if true)
 - --weights: strin(s) (provide weight file(s) relative path(s), if testing)
 
@@ -134,19 +162,19 @@ You can use our pretrained models over the test sets of FUNSD[^1] and Pau Riba's
 
 **E2E-FUNSD-GT**:
 ```
-python src/main.py -addG -addT -addE -addV --gpu 0 --test --weights e2e-funsd-best.pt
+python doc2graph/main.py -addG -addT -addE -addV --gpu 0 --test --weights e2e-funsd-best.pt
 ```
 
 **E2E-FUNSD-YOLO**:
 ```
-python src/main.py -addG -addT -addE -addV --gpu 0 --test --weights e2e-funsd-best.pt --node-granularity yolo
+python doc2graph/main.py -addG -addT -addE -addV --gpu 0 --test --weights e2e-funsd-best.pt --node-granularity yolo
 ```
 
 2. on Pau Riba's dataset, we were able to perform both Layout Analysis and Table Detection
 
 **E2E-PAU**:
 ```
-python src/main.py -addG -addT -addE -addV --gpu 0 --test --weights e2e-pau-best.pt --src-data PAU --edge-type knn
+python doc2graph/main.py -addG -addT -addE -addV --gpu 0 --test --weights e2e-pau-best.pt --src-data PAU --edge-type knn
 ```
   
 ---
