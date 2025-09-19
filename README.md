@@ -4,6 +4,8 @@
 
 ![Python](https://img.shields.io/badge/python-3.8%7C3.9%7C3.10%7C3.11-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54) ![PyTorch](https://img.shields.io/badge/PyTorch-1.12%2B-EE4C2C?style=for-the-badge&logo=PyTorch&logoColor=white) ![uv](https://img.shields.io/badge/uv-package%20manager-FFD43B?style=for-the-badge&logo=python&logoColor=black) ![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/andreagemelli/doc2graph)
+
 This library is the implementation of the paper [Doc2Graph: a Task Agnostic Document Understanding Framework based on Graph Neural Networks](https://arxiv.org/abs/2208.11168), accepted at [TiE @ ECCV 2022](https://sites.google.com/view/tie-eccv2022/accepted-papers?authuser=0).
 
 The model and pipeline aims at being task-agnostic on the domain of Document Understanding. It is an ongoing project, these are the steps already achieved and the ones we would like to implement in the future:
