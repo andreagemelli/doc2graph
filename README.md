@@ -32,10 +32,14 @@ uv sync
 uv pip install -e .
 
 # Initialize the project (downloads datasets)
-uv run doc2graph.main --init
+uv run python -m doc2graph.main --init
 
 # Run inference on a document
-uv run python -m doc2graph.main -addG -addT -addE -addV --weights e2e-funsd-best.pt --inference --docs /path/to/your/image.png
+uv run python -m doc2graph.main \
+   -addG -addT -addE -addV \
+   --weights e2e-funsd-best.pt \
+   --inference \
+   --docs /path/to/your/image.png
 ```
 
 Check out the [tutorial notebook](tutorial/kie.ipynb) for a complete walkthrough!
@@ -52,7 +56,11 @@ Index:
 ## News!
 - 🔥 Added **inference** method: you can now use Doc2Graph directly on your documents simply passing a path to them! <br> This call will output an image with the connected entities and a json / dictionary with all the useful information you need! 🤗
 ```
-uv run python -m doc2graph.main -addG -addT -addE -addV --weights e2e-funsd-best.pt --inference --docs /path/to/your/image.png
+uv run python -m doc2graph.main \
+   -addG -addT -addE -addV \
+   --weights e2e-funsd-best.pt \
+   --inference \
+   --docs /path/to/your/image.png
 ```
   
 - 🔥 Added **tutorial** folder: get to know how to use Doc2Graph from the tutorial notebooks!
@@ -102,7 +110,7 @@ uv add dgl-cu118 --index-url https://data.dgl.ai/wheels/repo.html
 Finally, create the project folder structure and download data:
 
 ```
-python doc2graph.main --init
+uv run python -m doc2graph.main --init
 ```
 The script will download and setup:
 - FUNSD and the 'adjusted_annotations' for FUNSD[^1] are given by the work of[^3].
@@ -120,11 +128,11 @@ You can download our model checkpoints [here](https://drive.google.com/file/d/15
 ## Training
 1. To train our **Doc2Graph** model (using CPU) use:
 ```
-python doc2graph.main [SETTINGS]
+uv run python -m doc2graph.main [SETTINGS]
 ```
 2. Instead, to test a trained **Doc2Graph** model (using GPU) [weights can be one or more file]:
 ```
-python doc2graph.main [SETTINGS] --gpu 0 --test --weights *.pt
+uv run python -m doc2graph.main [SETTINGS] --gpu 0 --test --weights *.pt
 ```
 The project can be customized either changing directly `configs/base.yaml` file or providing these flags when calling `doc2graph.main`.
 
@@ -164,19 +172,34 @@ You can use our pretrained models over the test sets of FUNSD[^1] and Pau Riba's
 
 **E2E-FUNSD-GT**:
 ```
-python doc2graph.main -addG -addT -addE -addV --gpu 0 --test --weights e2e-funsd-best.pt
+uv run python -m doc2graph.main \
+  -addG -addT -addE -addV \
+  --gpu 0 \
+  --test \
+  --weights e2e-funsd-best.pt
 ```
 
 **E2E-FUNSD-YOLO**:
 ```
-python doc2graph.main -addG -addT -addE -addV --gpu 0 --test --weights e2e-funsd-best.pt --node-granularity yolo
+uv run python -m doc2graph.main \
+  -addG -addT -addE -addV \
+  --gpu 0 \
+  --test \
+  --weights e2e-funsd-best.pt \
+  --node-granularity yolo
 ```
 
 2. on Pau Riba's dataset, we were able to perform both Layout Analysis and Table Detection
 
 **E2E-PAU**:
 ```
-python doc2graph.main -addG -addT -addE -addV --gpu 0 --test --weights e2e-pau-best.pt --src-data PAU --edge-type knn
+uv run python -m doc2graph.main \
+  -addG -addT -addE -addV \
+   --gpu 0 \
+   --test  \
+   --weights e2e-pau-best.pt \
+   --src-data PAU \
+   --edge-type knn
 ```
   
 ---
