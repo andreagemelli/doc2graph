@@ -60,7 +60,7 @@ class FeatureBuilder:
         """Add features to provided graphs
 
         Args:
-            graphs (list) : list of DGLGraphs
+            graphs (list) : list of PyG Data graphs
             features (list) : list of features "sources", like text, positions and images
 
         Returns:
@@ -131,7 +131,7 @@ class FeatureBuilder:
                 chunks.append(len(torch.flatten(h[0]).tolist()))
 
             if self.add_eweights:
-                u, v = g.edges()
+                u, v = g.edge_index
                 srcs, dsts = u.tolist(), v.tolist()
                 distances = []
                 angles = []
@@ -150,14 +150,14 @@ class FeatureBuilder:
 
                 m = max(distances)
                 polar_coordinates = to_bin(distances, angles, self.num_polar_bins)
-                g.edata["feat"] = polar_coordinates
+                g.edge_attr = polar_coordinates
 
             else:
-                distances = [0.0 for _ in range(g.number_of_edges())]
+                distances = [0.0 for _ in range(g.num_edges)]
                 m = 1
 
-            g.ndata["geom"] = torch.tensor(geom, dtype=torch.float32)
-            g.ndata["feat"] = torch.tensor(feats, dtype=torch.float32)
+            g.geom = torch.tensor(geom, dtype=torch.float32)
+            g.x = torch.tensor(feats, dtype=torch.float32)
 
             distances = torch.tensor(
                 [(1 - d / m) for d in distances], dtype=torch.float32
@@ -167,7 +167,7 @@ class FeatureBuilder:
                 torch.full_like(distances, 0.1),
                 torch.zeros_like(distances),
             )
-            g.edata["weights"] = tresh_dist
+            g.weights = tresh_dist
 
             norm = []
             num_nodes = len(features["boxs"][id]) - 1
@@ -179,7 +179,7 @@ class FeatureBuilder:
                     norm.append([1.0 / neigs])
                 except:
                     norm.append([1.0])
-            g.ndata["norm"] = torch.tensor(norm, dtype=torch.float32)
+            g.norm = torch.tensor(norm, dtype=torch.float32)
 
             #! DEBUG PURPOSES TO VISUALIZE RANDOM GRAPH IMAGE FROM DATASET
             if False:

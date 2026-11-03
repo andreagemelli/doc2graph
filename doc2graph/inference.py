@@ -51,13 +51,13 @@ def inference(weights, paths, device=-1):
             name = name.split(".")[0]
             print(f" -> {name}")
 
-            n, e = model(graph.to(device), graph.ndata["feat"].to(device))
+            n, e = model(graph.to(device), graph.x.to(device))
             _, epreds = torch.max(F.softmax(e, dim=1), dim=1)
             _, npreds = torch.max(F.softmax(n, dim=1), dim=1)
 
             # save results
             links = (epreds == 1).nonzero(as_tuple=True)[0].tolist()
-            u, v = graph.edges()
+            u, v = graph.edge_index
             entities = features["boxs"][num]
             contents = features["texts"][num]
 

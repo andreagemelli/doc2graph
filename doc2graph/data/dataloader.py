@@ -2,7 +2,7 @@ import os
 from random import randint
 from typing import Tuple
 
-import dgl
+from torch_geometric.data import Data
 import numpy as np
 import torch
 import torch.utils.data as data
@@ -61,10 +61,10 @@ class Document2Graph(data.Dataset):
                 np.array([l for nl in self.node_labels for l in nl])
             )
             self.node_num_classes = len(self.node_unique_labels)
-            self.node_num_features = self.graphs[0].ndata["feat"].shape[1]
+            self.node_num_features = self.graphs[0].x.shape[1]
 
             for idx, labels in enumerate(self.node_labels):
-                self.graphs[idx].ndata["label"] = torch.tensor(
+                self.graphs[idx].y = torch.tensor(
                     [
                         np.where(target == self.node_unique_labels)[0][0]
                         for target in labels
@@ -78,12 +78,12 @@ class Document2Graph(data.Dataset):
             self.edge_num_classes = len(self.edge_unique_labels)
             try:
                 # TODO to be changed
-                self.edge_num_features = self.graphs[0].edata["feat"].shape[1]
+                self.edge_num_features = self.graphs[0].edge_attr.shape[1]
             except:
                 self.edge_num_features = 0
 
             for idx, labels in enumerate(self.edge_labels):
-                self.graphs[idx].edata["label"] = torch.tensor(
+                self.graphs[idx].edge_label = torch.tensor(
                     [
                         np.where(target == self.edge_unique_labels)[0][0]
                         for target in labels
@@ -91,7 +91,7 @@ class Document2Graph(data.Dataset):
                     dtype=torch.int64,
                 )
 
-    def __getitem__(self, index: int) -> dgl.DGLGraph:
+    def __getitem__(self, index: int) -> Data:
         """Returns item (graph), given index
 
         Args:
@@ -107,7 +107,7 @@ class Document2Graph(data.Dataset):
         """It uses GraphBuilder and FeaturesBuilder objects to get graphs (and lables, if any) from source data.
 
         Returns:
-            tuple (lists): DGLGraphs, nodes and edges label names, paths per each file
+            tuple (lists): PyG Data graphs, nodes and edges label names, paths per each file
         """
         graphs, node_labels, edge_labels, features = self.GB.get_graph(
             self.src_path, self.src_data
@@ -205,11 +205,11 @@ class Document2Graph(data.Dataset):
         graph_path = self.paths[num]
         graph_img = Image.open(graph_path).convert("RGB")
         if labels_ids is None:
-            labels_ids = graph.edata["label"].nonzero().flatten().tolist()
+            labels_ids = graph.edge_label.nonzero().flatten().tolist()
         center = lambda rect: ((rect[2] + rect[0]) / 2, (rect[3] + rect[1]) / 2)
         graph_draw = ImageDraw.Draw(graph_img)
         w, h = graph_img.size
-        boxs = graph.ndata["geom"][:, :4].tolist()
+        boxs = graph.geom[:, :4].tolist()
         boxs = [[box[0] * w, box[1] * h, box[2] * w, box[3] * h] for box in boxs]
 
         if node_labels is not None:
@@ -227,7 +227,7 @@ class Document2Graph(data.Dataset):
         if preds is not None:
             graph_draw.rectangle(preds, outline="green", width=4)
 
-        u, v = graph.edges()
+        u, v = graph.edge_index
         for id in labels_ids:
             sc = center(boxs[u[id]])
             ec = center(boxs[v[id]])

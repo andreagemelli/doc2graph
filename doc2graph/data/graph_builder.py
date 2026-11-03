@@ -4,7 +4,7 @@ import random
 import xml.etree.ElementTree as ET
 from typing import Tuple
 
-import dgl
+from torch_geometric.data import Data
 import easyocr
 import numpy as np
 import torch
@@ -54,22 +54,18 @@ class GraphBuilder:
                 'GraphBuilder exception: source data invalid. Choose from ["FUNSD", "PAU", "CUSTOM"]'
             )
 
-    def balance_edges(self, g: dgl.DGLGraph, cls=None) -> dgl.DGLGraph:
+    def balance_edges(self, g: Data, cls=None) -> Data:
         """if cls (class) is not None, but an integer instead, balance that class to be equal to the sum of the other classes
 
         Args:
-            g (DGLGraph) : a DGL graph
+            g (Data) : a PyG graph
             cls (int) : class number, if any
 
         Returns:
-            g (DGLGraph) : the new balanced graph
+            g (Data) : the new balanced graph
         """
 
-        edge_targets = g.edata["label"]
-        u, v = g.all_edges(form="uv")
-        edges_list = list()
-        for e in zip(u.tolist(), v.tolist()):
-            edges_list.append([e[0], e[1]])
+        edge_targets = g.edge_label
 
         if type(cls) is int:
             to_remove = edge_targets == cls
@@ -77,15 +73,14 @@ class GraphBuilder:
 
             for _ in range(int((edge_targets != cls).sum() / 2)):
                 indeces_to_save = [random.choice(indices_to_remove)]
-                edge = edges_list[indeces_to_save[0]]
 
                 for index in sorted(indeces_to_save, reverse=True):
                     del indices_to_remove[indices_to_remove.index(index)]
 
-            indices_to_remove = torch.flatten(
-                torch.tensor(indices_to_remove, dtype=torch.int32)
-            )
-            g = dgl.remove_edges(g, indices_to_remove)
+            keep = torch.ones(g.num_edges, dtype=torch.bool)
+            keep[indices_to_remove] = False
+            for k in [k for k in g.keys() if g.is_edge_attr(k)]:
+                g[k] = g[k][..., keep] if k == "edge_index" else g[k][keep]
             return g
 
         else:
@@ -252,10 +247,9 @@ class GraphBuilder:
             else:
                 raise Exception("Other edge types still under development.")
 
-            g = dgl.graph(
-                (torch.tensor(u), torch.tensor(v)),
+            g = Data(
+                edge_index=torch.tensor([u, v], dtype=torch.long),
                 num_nodes=len(boxs),
-                idtype=torch.int32,
             )
             graphs.append(g)
 
@@ -413,10 +407,9 @@ class GraphBuilder:
                     el.append("none")
             edge_labels.append(el)
 
-            g = dgl.graph(
-                (torch.tensor(u), torch.tensor(v)),
+            g = Data(
+                edge_index=torch.tensor([u, v], dtype=torch.long),
                 num_nodes=len(tokens_bbox),
-                idtype=torch.int32,
             )
             graphs.append(g)
 
@@ -486,11 +479,10 @@ class GraphBuilder:
                 edge_labels.append(el)
 
                 # creating graph
-                g = dgl.graph(
-                    (torch.tensor(u), torch.tensor(v)),
-                    num_nodes=len(boxs),
-                    idtype=torch.int32,
-                )
+                g = Data(
+                edge_index=torch.tensor([u, v], dtype=torch.long),
+                num_nodes=len(boxs),
+            )
                 graphs.append(g)
 
             #! DEBUG PURPOSES TO VISUALIZE RANDOM GRAPH IMAGE FROM DATASET
@@ -500,7 +492,7 @@ class GraphBuilder:
                     print("Savin example:", img_name)
 
                     edge_unique_labels = np.unique(el)
-                    g.edata["label"] = torch.tensor(
+                    g.edge_label = torch.tensor(
                         [np.where(target == edge_unique_labels)[0][0] for target in el]
                     )
 
@@ -522,8 +514,8 @@ class GraphBuilder:
                             color = "gray"
                         draw_removed.rectangle(box, outline=color, width=3)
 
-                    u, v = g.all_edges()
-                    labels = g.edata["label"].tolist()
+                    u, v = g.edge_index
+                    labels = g.edge_label.tolist()
                     u, v = u.tolist(), v.tolist()
 
                     center = lambda rect: (
@@ -602,11 +594,10 @@ class GraphBuilder:
                 edge_labels.append(el)
 
                 # creating graph
-                g = dgl.graph(
-                    (torch.tensor(u), torch.tensor(v)),
-                    num_nodes=len(features["boxs"][f]),
-                    idtype=torch.int32,
-                )
+                g = Data(
+                edge_index=torch.tensor([u, v], dtype=torch.long),
+                num_nodes=len(features["boxs"][f]),
+            )
                 graphs.append(g)
         else:
             # TODO develop OCR too

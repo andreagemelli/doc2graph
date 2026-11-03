@@ -11,7 +11,7 @@ cc.*
 .ipynb_checkpoints/
 
 #user-defined
-DATA
+/DATA
 _old
 *.env
 outputs

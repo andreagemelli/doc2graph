@@ -122,6 +122,7 @@ def main():
         print("Initialization completed!")
 
     else:
+        project_tree()  # make sure output folders exist (idempotent)
         set_preprocessing(args)
         if args.inference:
             create_folder("inference")

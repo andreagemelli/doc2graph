@@ -54,6 +54,7 @@ Index:
 
 ---
 ## News!
+- 🚧 **v0.3.0-beta — migration from DGL to PyTorch Geometric.** Doc2Graph now builds on [PyTorch Geometric](https://github.com/pyg-team/pytorch_geometric) instead of [DGL](https://github.com/dmlc/dgl). DGL is no longer actively maintained (no release in about two years), it is incompatible with recent PyTorch versions, and its open security advisory (GHSA-3x5x-fw77-g54c) has no patched release. Moving to PyG lets us follow current PyTorch releases and keep dependencies free of known vulnerabilities. <br> Pretrained checkpoints are unchanged and load as before; on the FUNSD test set the shipped `e2e-funsd-best.pt` gives identical metrics with DGL and PyG. Other changes: PyTorch `>=2.9.1` and Python `>=3.10`. This is a beta: training from scratch on GPU and the PAU pipeline have not been re-validated yet, so please report any issue.
 - 🔥 Added **inference** method: you can now use Doc2Graph directly on your documents simply passing a path to them! <br> This call will output an image with the connected entities and a json / dictionary with all the useful information you need! 🤗
 ```
 uv run python -m doc2graph.main \
@@ -97,15 +98,14 @@ This will:
 
 ### Additional Setup (Optional)
 
-For GPU acceleration, you may need to install CUDA-specific versions of PyTorch and DGL:
+For GPU acceleration, you may need to install a CUDA-specific version of PyTorch (PyG is pure Python and needs nothing extra for the ops used here):
 
 ```bash
 # For CUDA 11.8 (adjust version as needed)
 uv add torch==1.13.1+cu118 torchvision==0.14.1+cu118 --index-url https://download.pytorch.org/whl/cu118
-uv add dgl-cu118 --index-url https://data.dgl.ai/wheels/repo.html
 ```
 
-**Note**: For different OS installations or CUDA versions, refer to [PyTorch](https://pytorch.org/get-started/previous-versions/) and [DGL](https://www.dgl.ai/pages/start.html) documentation.
+**Note**: For different OS installations or CUDA versions, refer to [PyTorch](https://pytorch.org/get-started/previous-versions/) documentation.
 
 Finally, create the project folder structure and download data:
 
@@ -227,13 +227,3 @@ isbn="978-3-031-25069-9"
 ```
 
 ---
-
-## ⚠️ Security Notice
-
-**DGL Vulnerability**: This project uses `dgl>=1.1.3,<2.0.0` which has a known security vulnerability related to RPC pickle deserialization (GHSA-3x5x-fw77-g54c). 
-
-**Workaround**: When running DGL distributed training and inference (DistDGL), ensure you do not assign public IPs to any instance in the cluster.
-
-**Resolution**: This vulnerability will be addressed in future versions of the project when a compatible DGL version with the security fix becomes available.
-
-For more details, see the [DGL security advisory](https://github.com/dmlc/dgl/security/advisories/GHSA-3x5x-fw77-g54c).

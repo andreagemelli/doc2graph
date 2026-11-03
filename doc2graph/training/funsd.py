@@ -3,7 +3,7 @@ from sklearn.model_selection import KFold
 import torch
 from torch.nn import functional as F
 from random import seed
-import dgl
+from torch_geometric.data import Batch
 import time
 from statistics import mean
 import numpy as np
@@ -60,12 +60,12 @@ def e2e(args):
 
             # TRAIN
             train_graphs = [data.graphs[i] for i in train_index]
-            tg = dgl.batch(train_graphs)
-            tg = tg.int().to(device)
+            tg = Batch.from_data_list(train_graphs)
+            tg = tg.to(device)
 
             val_graphs = [data.graphs[i] for i in val_index]
-            vg = dgl.batch(val_graphs)
-            vg = vg.int().to(device)
+            vg = Batch.from_data_list(val_graphs)
+            vg = vg.to(device)
 
             ################* STEP 1: CREATE MODEL ################
             model = sm.get_model(
@@ -89,24 +89,24 @@ def e2e(args):
 
             ################* STEP 2: TRAINING ################
             print("\n### TRAINING ###")
-            print(f"-> Training samples: {tg.batch_size}")
-            print(f"-> Validation samples: {vg.batch_size}\n")
+            print(f"-> Training samples: {tg.num_graphs}")
+            print(f"-> Validation samples: {vg.num_graphs}\n")
 
             # im_step = 0
             for epoch in range(cfg_train.epochs):
                 # * TRAINING
                 model.train()
 
-                n_scores, e_scores = model(tg, tg.ndata["feat"].to(device))
+                n_scores, e_scores = model(tg, tg.x.to(device))
                 n_loss = compute_crossentropy_loss(
-                    n_scores.to(device), tg.ndata["label"].to(device)
+                    n_scores.to(device), tg.y.to(device)
                 )
                 e_loss = compute_crossentropy_loss(
-                    e_scores.to(device), tg.edata["label"].to(device)
+                    e_scores.to(device), tg.edge_label.to(device)
                 )
                 tot_loss = n_loss + e_loss
-                macro, micro = get_f1(n_scores, tg.ndata["label"].to(device))
-                auc = compute_auc_mc(e_scores.to(device), tg.edata["label"].to(device))
+                macro, micro = get_f1(n_scores, tg.y.to(device))
+                auc = compute_auc_mc(e_scores.to(device), tg.edge_label.to(device))
 
                 optimizer.zero_grad()
                 tot_loss.backward()
@@ -116,17 +116,17 @@ def e2e(args):
                 # * VALIDATION
                 model.eval()
                 with torch.no_grad():
-                    val_n_scores, val_e_scores = model(vg, vg.ndata["feat"].to(device))
+                    val_n_scores, val_e_scores = model(vg, vg.x.to(device))
                     val_n_loss = compute_crossentropy_loss(
-                        val_n_scores.to(device), vg.ndata["label"].to(device)
+                        val_n_scores.to(device), vg.y.to(device)
                     )
                     val_e_loss = compute_crossentropy_loss(
-                        val_e_scores.to(device), vg.edata["label"].to(device)
+                        val_e_scores.to(device), vg.edge_label.to(device)
                     )
                     val_tot_loss = val_n_loss + val_e_loss
-                    val_macro, _ = get_f1(val_n_scores, vg.ndata["label"].to(device))
+                    val_macro, _ = get_f1(val_n_scores, vg.y.to(device))
                     val_auc = compute_auc_mc(
-                        val_e_scores.to(device), vg.edata["label"].to(device)
+                        val_e_scores.to(device), vg.edge_label.to(device)
                     )
 
                 # scheduler.step(val_auc)
@@ -218,28 +218,28 @@ def e2e(args):
     best_model = ""
     nodes_micro = []
     edges_f1 = []
-    test_graph = dgl.batch(test_data.graphs).to(device)
+    test_graph = Batch.from_data_list(test_data.graphs).to(device)
 
     for m in models:
         model.load_state_dict(torch.load(CHECKPOINTS / m, map_location=device))
         model.eval()
         with torch.no_grad():
-            n, e = model(test_graph, test_graph.ndata["feat"].to(device))
-            auc = compute_auc_mc(e.to(device), test_graph.edata["label"].to(device))
+            n, e = model(test_graph, test_graph.x.to(device))
+            auc = compute_auc_mc(e.to(device), test_graph.edge_label.to(device))
             _, preds = torch.max(F.softmax(e, dim=1), dim=1)
 
-            accuracy, f1 = get_binary_accuracy_and_f1(preds, test_graph.edata["label"])
+            accuracy, f1 = get_binary_accuracy_and_f1(preds, test_graph.edge_label)
             _, classes_f1 = get_binary_accuracy_and_f1(
-                preds, test_graph.edata["label"], per_class=True
+                preds, test_graph.edge_label, per_class=True
             )
             edges_f1.append(classes_f1[1])
 
-            macro, micro = get_f1(n, test_graph.ndata["label"].to(device))
+            macro, micro = get_f1(n, test_graph.y.to(device))
             nodes_micro.append(micro)
             if classes_f1[1] >= max(edges_f1):
                 best_model = m
 
-            test_graph.edata["preds"] = preds
+            test_graph.edge_preds = preds
 
         ################* STEP 4: RESULTS ################
         print("\n### RESULTS {} ###".format(m))
@@ -252,20 +252,20 @@ def e2e(args):
     model.load_state_dict(torch.load(CHECKPOINTS / best_model, map_location=device))
     model.eval()
     with torch.no_grad():
-        n, e = model(test_graph, test_graph.ndata["feat"].to(device))
-        auc = compute_auc_mc(e.to(device), test_graph.edata["label"].to(device))
+        n, e = model(test_graph, test_graph.x.to(device))
+        auc = compute_auc_mc(e.to(device), test_graph.edge_label.to(device))
 
         _, epreds = torch.max(F.softmax(e, dim=1), dim=1)
         _, npreds = torch.max(F.softmax(n, dim=1), dim=1)
-        test_graph.edata["preds"] = epreds
-        test_graph.ndata["preds"] = npreds
-        test_graph.ndata["net"] = n
+        test_graph.edge_preds = epreds
+        test_graph.node_preds = npreds
+        test_graph.node_logits = n
 
-        accuracy, f1 = get_binary_accuracy_and_f1(epreds, test_graph.edata["label"])
+        accuracy, f1 = get_binary_accuracy_and_f1(epreds, test_graph.edge_label)
         _, classes_f1 = get_binary_accuracy_and_f1(
-            epreds, test_graph.edata["label"], per_class=True
+            epreds, test_graph.edge_label, per_class=True
         )
-        macro, micro = get_f1(n, test_graph.ndata["label"].to(device))
+        macro, micro = get_f1(n, test_graph.y.to(device))
 
     # ################* STEP 4: RESULTS ################
     print("\n### BEST RESULTS ###")
@@ -351,12 +351,12 @@ def entity_linking(args):
 
             # TRAIN
             train_graphs = [data.graphs[i] for i in train_index]
-            tg = dgl.batch(train_graphs)
-            tg = tg.int().to(device)
+            tg = Batch.from_data_list(train_graphs)
+            tg = tg.to(device)
 
             val_graphs = [data.graphs[i] for i in val_index]
-            vg = dgl.batch(val_graphs)
-            vg = vg.int().to(device)
+            vg = Batch.from_data_list(val_graphs)
+            vg = vg.to(device)
 
             ################* STEP 1: CREATE MODEL ################
             model = sm.get_model(None, 2, data.get_chunks())
@@ -378,19 +378,19 @@ def entity_linking(args):
 
             ################* STEP 2: TRAINING ################
             print("\n### TRAINING ###")
-            print(f"-> Training samples: {tg.batch_size}")
-            print(f"-> Validation samples: {vg.batch_size}\n")
+            print(f"-> Training samples: {tg.num_graphs}")
+            print(f"-> Validation samples: {vg.num_graphs}\n")
 
             # im_step = 0
             for epoch in range(cfg_train.epochs):
                 # * TRAINING
                 model.train()
 
-                scores = model(tg, tg.ndata["feat"].to(device))
+                scores = model(tg, tg.x.to(device))
                 loss = compute_crossentropy_loss(
-                    scores.to(device), tg.edata["label"].to(device)
+                    scores.to(device), tg.edge_label.to(device)
                 )
-                auc = compute_auc_mc(scores.to(device), tg.edata["label"].to(device))
+                auc = compute_auc_mc(scores.to(device), tg.edge_label.to(device))
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -400,12 +400,12 @@ def entity_linking(args):
                 # * VALIDATION
                 model.eval()
                 with torch.no_grad():
-                    val_scores = model(vg, vg.ndata["feat"].to(device))
+                    val_scores = model(vg, vg.x.to(device))
                     val_loss = compute_crossentropy_loss(
-                        val_scores.to(device), vg.edata["label"].to(device)
+                        val_scores.to(device), vg.edge_label.to(device)
                     )
                     val_auc = compute_auc_mc(
-                        val_scores.to(device), vg.edata["label"].to(device)
+                        val_scores.to(device), vg.edge_label.to(device)
                     )
 
                 # scheduler.step(val_auc)
@@ -486,22 +486,22 @@ def entity_linking(args):
     model = sm.get_model(None, 2, test_data.get_chunks())
     best_model = ""
     pair_scores = []
-    test_graph = dgl.batch(test_data.graphs).to(device)
+    test_graph = Batch.from_data_list(test_data.graphs).to(device)
 
     for m in models:
         model.load_state_dict(torch.load(CHECKPOINTS / m, map_location=device))
         model.eval()
         with torch.no_grad():
-            scores = model(test_graph, test_graph.ndata["feat"].to(device))
+            scores = model(test_graph, test_graph.x.to(device))
             auc = compute_auc_mc(
-                scores.to(device), test_graph.edata["label"].to(device)
+                scores.to(device), test_graph.edge_label.to(device)
             )
 
             _, preds = torch.max(F.softmax(scores, dim=1), dim=1)
 
-            accuracy, f1 = get_binary_accuracy_and_f1(preds, test_graph.edata["label"])
+            accuracy, f1 = get_binary_accuracy_and_f1(preds, test_graph.edge_label)
             _, classes_f1 = get_binary_accuracy_and_f1(
-                preds, test_graph.edata["label"], per_class=True
+                preds, test_graph.edge_label, per_class=True
             )
 
             pair_scores.append(classes_f1[1])
@@ -521,15 +521,15 @@ def entity_linking(args):
     model.load_state_dict(torch.load(CHECKPOINTS / best_model, map_location=device))
     model.eval()
     with torch.no_grad():
-        scores = model(test_graph, test_graph.ndata["feat"].to(device))
-        auc = compute_auc_mc(scores.to(device), test_graph.edata["label"].to(device))
+        scores = model(test_graph, test_graph.x.to(device))
+        auc = compute_auc_mc(scores.to(device), test_graph.edge_label.to(device))
 
         _, preds = torch.max(F.softmax(scores, dim=1), dim=1)
-        test_graph.edata["preds"] = preds
+        test_graph.edge_preds = preds
 
-        accuracy, f1 = get_binary_accuracy_and_f1(preds, test_graph.edata["label"])
+        accuracy, f1 = get_binary_accuracy_and_f1(preds, test_graph.edge_label)
         _, classes_f1 = get_binary_accuracy_and_f1(
-            preds, test_graph.edata["label"], per_class=True
+            preds, test_graph.edge_label, per_class=True
         )
 
     if not args.test:
