@@ -2,23 +2,13 @@
 
 ![model](model.png)
 
-![Python](https://img.shields.io/badge/python-3.8%7C3.9%7C3.10%7C3.11-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54) ![PyTorch](https://img.shields.io/badge/PyTorch-1.12%2B-EE4C2C?style=for-the-badge&logo=PyTorch&logoColor=white) ![uv](https://img.shields.io/badge/uv-package%20manager-FFD43B?style=for-the-badge&logo=python&logoColor=black) ![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
+![Python](https://img.shields.io/badge/python-3.10%7C3.11-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54) ![PyTorch](https://img.shields.io/badge/PyTorch-2.9%2B-EE4C2C?style=for-the-badge&logo=PyTorch&logoColor=white) ![uv](https://img.shields.io/badge/uv-package%20manager-FFD43B?style=for-the-badge&logo=python&logoColor=black) ![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/andreagemelli/doc2graph)
 
 This library is the implementation of the paper [Doc2Graph: a Task Agnostic Document Understanding Framework based on Graph Neural Networks](https://arxiv.org/abs/2208.11168), accepted at [TiE @ ECCV 2022](https://sites.google.com/view/tie-eccv2022/accepted-papers?authuser=0).
 
-The model and pipeline aims at being task-agnostic on the domain of Document Understanding. It is an ongoing project, these are the steps already achieved and the ones we would like to implement in the future:
-
-- [x] Build a model based on GNNs to spot key-value relationships on forms
-- [x] Publish the preliminary results and the code
-- [x] Extend the framework to other document-related tasks
-  - [x] Business documents Layout Analysis
-  - [x] Table Detection
-- [ ] Let the user train Doc2Graph over private / other datasets using our dataloader
-- [ ] Publish Doc2Graph to PyPI for easy installation
-- [ ] Retrain Doc2Graph in a new and extended version
-
+The model and pipeline aim at being task-agnostic on the domain of Document Understanding: key-value extraction on forms, business documents layout analysis and table detection.
 
 ## Quick Start
 
@@ -54,7 +44,14 @@ Index:
 
 ---
 ## News!
-- 🚧 **v0.3.0-beta — migration from DGL to PyTorch Geometric.** Doc2Graph now builds on [PyTorch Geometric](https://github.com/pyg-team/pytorch_geometric) instead of [DGL](https://github.com/dmlc/dgl). DGL is no longer actively maintained (no release in about two years), it is incompatible with recent PyTorch versions, and its open security advisory (GHSA-3x5x-fw77-g54c) has no patched release. Moving to PyG lets us follow current PyTorch releases and keep dependencies free of known vulnerabilities. <br> Pretrained checkpoints are unchanged and load as before; on the FUNSD test set the shipped `e2e-funsd-best.pt` gives identical metrics with DGL and PyG. Other changes: PyTorch `>=2.9.1` and Python `>=3.10`. This is a beta: training from scratch on GPU and the PAU pipeline have not been re-validated yet, so please report any issue.
+- 🚀 **v0.3.0-beta — migration from DGL to PyTorch Geometric.** Doc2Graph now builds on [PyTorch Geometric](https://github.com/pyg-team/pytorch_geometric) instead of [DGL](https://github.com/dmlc/dgl). DGL is no longer actively maintained (no release in about two years), it does not support recent PyTorch versions, and its open security advisory ([GHSA-3x5x-fw77-g54c](https://github.com/dmlc/dgl/security/advisories/GHSA-3x5x-fw77-g54c)) has no patched release. Moving to PyG lets us follow current PyTorch releases and keep dependencies free of known vulnerabilities. Requirements are now PyTorch `>=2.9.1` and Python `>=3.10`.
+  <br> **What was tested** (CPU only, no GPU available):
+  - old DGL layers vs. new PyG layers with the same weights on random batched graphs: identical outputs (max difference 0.0);
+  - pretrained `e2e-funsd-best.pt` on the FUNSD test set, DGL vs. PyG: identical metrics (entity labeling F1 0.8266, entity linking F1 0.5713, edge AUC 0.7721), so the shipped checkpoints load and behave exactly as before;
+  - short from-scratch training runs on FUNSD (train, validation, test and result saving) complete and converge.
+
+  <br> **Not yet validated:** full from-scratch training to the paper's numbers, GPU runs, and the PAU pipeline. This is a beta, please report any issue.
+  <br> **Need DGL?** For backward compatibility use release [`v0.2.0-beta`](https://github.com/andreagemelli/doc2graph/releases/tag/v0.2.0-beta) or version `0.2.1` (last DGL-based commit: `git checkout f602316`).
 - 🔥 Added **inference** method: you can now use Doc2Graph directly on your documents simply passing a path to them! <br> This call will output an image with the connected entities and a json / dictionary with all the useful information you need! 🤗
 ```
 uv run python -m doc2graph.main \
