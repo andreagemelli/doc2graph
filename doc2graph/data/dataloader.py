@@ -1,14 +1,15 @@
+import os
 from random import randint
 from typing import Tuple
+
+from torch_geometric.data import Data
+import numpy as np
 import torch
 import torch.utils.data as data
-import os
-import numpy as np
-from torch_geometric.data import Data
 from PIL import Image, ImageDraw
 
-from .feature_builder import FeatureBuilder
-from .graph_builder import GraphBuilder
+from ..data.feature_builder import FeatureBuilder
+from ..data.graph_builder import GraphBuilder
 from ..utils import get_config
 
 
@@ -57,9 +58,7 @@ class Document2Graph(data.Dataset):
         # NODES
         if self.node_labels:
             self.node_unique_labels = np.unique(
-                np.array(
-                    [label for node_labels in self.node_labels for label in node_labels]
-                )
+                np.array([l for nl in self.node_labels for l in nl])
             )
             self.node_num_classes = len(self.node_unique_labels)
             self.node_num_features = self.graphs[0].x.shape[1]
@@ -80,7 +79,7 @@ class Document2Graph(data.Dataset):
             try:
                 # TODO to be changed
                 self.edge_num_features = self.graphs[0].edge_attr.shape[1]
-            except (KeyError, AttributeError):
+            except:
                 self.edge_num_features = 0
 
             for idx, labels in enumerate(self.edge_labels):
@@ -207,10 +206,7 @@ class Document2Graph(data.Dataset):
         graph_img = Image.open(graph_path).convert("RGB")
         if labels_ids is None:
             labels_ids = graph.edge_label.nonzero().flatten().tolist()
-
-        def center(rect):
-            return ((rect[2] + rect[0]) / 2, (rect[3] + rect[1]) / 2)
-
+        center = lambda rect: ((rect[2] + rect[0]) / 2, (rect[3] + rect[1]) / 2)
         graph_draw = ImageDraw.Draw(graph_img)
         w, h = graph_img.size
         boxs = graph.geom[:, :4].tolist()

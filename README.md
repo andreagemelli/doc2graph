@@ -4,6 +4,8 @@
 
 ![Python](https://img.shields.io/badge/python-3.8%7C3.9%7C3.10%7C3.11-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54) ![PyTorch](https://img.shields.io/badge/PyTorch-1.12%2B-EE4C2C?style=for-the-badge&logo=PyTorch&logoColor=white) ![uv](https://img.shields.io/badge/uv-package%20manager-FFD43B?style=for-the-badge&logo=python&logoColor=black) ![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/andreagemelli/doc2graph)
+
 This library is the implementation of the paper [Doc2Graph: a Task Agnostic Document Understanding Framework based on Graph Neural Networks](https://arxiv.org/abs/2208.11168), accepted at [TiE @ ECCV 2022](https://sites.google.com/view/tie-eccv2022/accepted-papers?authuser=0).
 
 The model and pipeline aims at being task-agnostic on the domain of Document Understanding. It is an ongoing project, these are the steps already achieved and the ones we would like to implement in the future:
@@ -30,10 +32,14 @@ uv sync
 uv pip install -e .
 
 # Initialize the project (downloads datasets)
-uv run doc2graph.main --init
+uv run python -m doc2graph.main --init
 
 # Run inference on a document
-uv run python -m doc2graph.main -addG -addT -addE -addV --weights e2e-funsd-best.pt --inference --docs /path/to/your/image.png
+uv run python -m doc2graph.main \
+   -addG -addT -addE -addV \
+   --weights e2e-funsd-best.pt \
+   --inference \
+   --docs /path/to/your/image.png
 ```
 
 Check out the [tutorial notebook](tutorial/kie.ipynb) for a complete walkthrough!
@@ -51,7 +57,11 @@ Index:
 - 🚧 **v0.3.0-beta — migration from DGL to PyTorch Geometric.** Doc2Graph now builds on [PyTorch Geometric](https://github.com/pyg-team/pytorch_geometric) instead of [DGL](https://github.com/dmlc/dgl). DGL is no longer actively maintained (no release in about two years), it is incompatible with recent PyTorch versions, and its open security advisory (GHSA-3x5x-fw77-g54c) has no patched release. Moving to PyG lets us follow current PyTorch releases and keep dependencies free of known vulnerabilities. <br> Pretrained checkpoints are unchanged and load as before; on the FUNSD test set the shipped `e2e-funsd-best.pt` gives identical metrics with DGL and PyG. Other changes: PyTorch `>=2.9.1` and Python `>=3.10`. This is a beta: training from scratch on GPU and the PAU pipeline have not been re-validated yet, so please report any issue.
 - 🔥 Added **inference** method: you can now use Doc2Graph directly on your documents simply passing a path to them! <br> This call will output an image with the connected entities and a json / dictionary with all the useful information you need! 🤗
 ```
-uv run python -m doc2graph.main -addG -addT -addE -addV --weights e2e-funsd-best.pt --inference --docs /path/to/your/image.png
+uv run python -m doc2graph.main \
+   -addG -addT -addE -addV \
+   --weights e2e-funsd-best.pt \
+   --inference \
+   --docs /path/to/your/image.png
 ```
   
 - 🔥 Added **tutorial** folder: get to know how to use Doc2Graph from the tutorial notebooks!
@@ -100,7 +110,7 @@ uv add torch==1.13.1+cu118 torchvision==0.14.1+cu118 --index-url https://downloa
 Finally, create the project folder structure and download data:
 
 ```
-python doc2graph.main --init
+uv run python -m doc2graph.main --init
 ```
 The script will download and setup:
 - FUNSD and the 'adjusted_annotations' for FUNSD[^1] are given by the work of[^3].
@@ -118,11 +128,11 @@ You can download our model checkpoints [here](https://drive.google.com/file/d/15
 ## Training
 1. To train our **Doc2Graph** model (using CPU) use:
 ```
-python doc2graph.main [SETTINGS]
+uv run python -m doc2graph.main [SETTINGS]
 ```
 2. Instead, to test a trained **Doc2Graph** model (using GPU) [weights can be one or more file]:
 ```
-python doc2graph.main [SETTINGS] --gpu 0 --test --weights *.pt
+uv run python -m doc2graph.main [SETTINGS] --gpu 0 --test --weights *.pt
 ```
 The project can be customized either changing directly `configs/base.yaml` file or providing these flags when calling `doc2graph.main`.
 
@@ -162,19 +172,34 @@ You can use our pretrained models over the test sets of FUNSD[^1] and Pau Riba's
 
 **E2E-FUNSD-GT**:
 ```
-python doc2graph.main -addG -addT -addE -addV --gpu 0 --test --weights e2e-funsd-best.pt
+uv run python -m doc2graph.main \
+  -addG -addT -addE -addV \
+  --gpu 0 \
+  --test \
+  --weights e2e-funsd-best.pt
 ```
 
 **E2E-FUNSD-YOLO**:
 ```
-python doc2graph.main -addG -addT -addE -addV --gpu 0 --test --weights e2e-funsd-best.pt --node-granularity yolo
+uv run python -m doc2graph.main \
+  -addG -addT -addE -addV \
+  --gpu 0 \
+  --test \
+  --weights e2e-funsd-best.pt \
+  --node-granularity yolo
 ```
 
 2. on Pau Riba's dataset, we were able to perform both Layout Analysis and Table Detection
 
 **E2E-PAU**:
 ```
-python doc2graph.main -addG -addT -addE -addV --gpu 0 --test --weights e2e-pau-best.pt --src-data PAU --edge-type knn
+uv run python -m doc2graph.main \
+  -addG -addT -addE -addV \
+   --gpu 0 \
+   --test  \
+   --weights e2e-pau-best.pt \
+   --src-data PAU \
+   --edge-type knn
 ```
   
 ---

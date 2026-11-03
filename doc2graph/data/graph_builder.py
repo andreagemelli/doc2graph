@@ -1,17 +1,18 @@
 import json
 import os
-from PIL import Image, ImageDraw
-from typing import Tuple
-import torch
-from torch_geometric.data import Data
 import random
-import numpy as np
-from tqdm import tqdm
 import xml.etree.ElementTree as ET
-import easyocr
+from typing import Tuple
 
-from .preprocessing import load_predictions
-from .utils import polar
+from torch_geometric.data import Data
+import easyocr
+import numpy as np
+import torch
+from PIL import Image, ImageDraw
+from tqdm import tqdm
+
+from ..data.preprocessing import load_predictions
+from ..data.utils import polar
 from ..utils import get_config
 
 
@@ -23,9 +24,6 @@ class GraphBuilder:
         self.node_granularity = self.cfg_preprocessing.GRAPHS.node_granularity
         random.seed = 42
         return
-
-    def __str__(self):
-        return f"GraphBuilder(edge_type={self.edge_type}, data_type={self.data_type}, node_granularity={self.node_granularity})"
 
     def get_graph(self, src_path: str, src_data: str) -> Tuple[list, list, list, list]:
         """Given the source, it returns a graph
@@ -332,10 +330,7 @@ class GraphBuilder:
             tokens_bbox = []
             tokens_text = []
             nl = []
-
-            def center(rect):
-                return ((rect[2] + rect[0]) / 2, (rect[3] + rect[1]) / 2)
-
+            center = lambda rect: ((rect[2] + rect[0]) / 2, (rect[3] + rect[1]) / 2)
             for parent in root:
                 if parent.tag.split("}")[1] == "Page":
                     for child in parent:
@@ -489,6 +484,77 @@ class GraphBuilder:
                 num_nodes=len(boxs),
             )
                 graphs.append(g)
+
+            #! DEBUG PURPOSES TO VISUALIZE RANDOM GRAPH IMAGE FROM DATASET
+            if False:
+                if justOne == file.split(".")[0]:
+                    print("\n\n### EXAMPLE ###")
+                    print("Savin example:", img_name)
+
+                    edge_unique_labels = np.unique(el)
+                    g.edge_label = torch.tensor(
+                        [np.where(target == edge_unique_labels)[0][0] for target in el]
+                    )
+
+                    g = self.balance_edges(
+                        g, 3, int(np.where("none" == edge_unique_labels)[0][0])
+                    )
+
+                    img_removed = Image.open(img_path).convert("RGB")
+                    draw_removed = ImageDraw.Draw(img_removed)
+
+                    for b, box in enumerate(boxs):
+                        if nl[b] == "header":
+                            color = "yellow"
+                        elif nl[b] == "question":
+                            color = "blue"
+                        elif nl[b] == "answer":
+                            color = "green"
+                        else:
+                            color = "gray"
+                        draw_removed.rectangle(box, outline=color, width=3)
+
+                    u, v = g.edge_index
+                    labels = g.edge_label.tolist()
+                    u, v = u.tolist(), v.tolist()
+
+                    center = lambda rect: (
+                        (rect[2] + rect[0]) / 2,
+                        (rect[3] + rect[1]) / 2,
+                    )
+
+                    num_pair = 0
+                    num_none = 0
+
+                    for p, pair in enumerate(zip(u, v)):
+                        sc = center(boxs[pair[0]])
+                        ec = center(boxs[pair[1]])
+                        if labels[p] == int(
+                            np.where("pair" == edge_unique_labels)[0][0]
+                        ):
+                            num_pair += 1
+                            color = "violet"
+                            draw_removed.ellipse(
+                                [(sc[0] - 4, sc[1] - 4), (sc[0] + 4, sc[1] + 4)],
+                                fill="green",
+                                outline="black",
+                            )
+                            draw_removed.ellipse(
+                                [(ec[0] - 4, ec[1] - 4), (ec[0] + 4, ec[1] + 4)],
+                                fill="red",
+                                outline="black",
+                            )
+                        else:
+                            num_none += 1
+                            color = "gray"
+                        draw_removed.line((sc, ec), fill=color, width=3)
+
+                    print(
+                        "Balanced Links: None {} | Key-Value {}".format(
+                            num_none, num_pair
+                        )
+                    )
+                    img_removed.save(f"esempi/FUNSD/{img_name}_removed_graph.png")
 
         elif self.node_granularity == "yolo":
             path_preds = os.path.join(src, "yolo_bbox")

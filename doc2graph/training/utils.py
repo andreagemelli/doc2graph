@@ -29,7 +29,7 @@ class EarlyStopping:
         """Constructor.
 
         Args:
-            model (DGLModel): graph or batch of graphs
+            model (PyG model): graph or batch of graphs
             name (str): name for weights.
             metric (str): set the stopper, following loss ['loss'] or accuracy ['acc'] on validation
             patience (int, optional): if validation do not improve after 'patience' iters, it stops training. Defaults to 50.

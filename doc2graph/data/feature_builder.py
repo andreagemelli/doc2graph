@@ -1,20 +1,21 @@
+import random
 from typing import Tuple
+
 import spacy
 import torch
 import torchvision
-from tqdm import tqdm
-from PIL import Image
 import torchvision.transforms.functional as tvF
+from PIL import Image, ImageDraw
+from tqdm import tqdm
 
-from ..paths import CHECKPOINTS
+from ..data.utils import get_histogram, polar, to_bin
 from ..models.unet import Unet
-from .utils import to_bin
-from .utils import polar, get_histogram
+from ..paths import CHECKPOINTS
 from ..utils import get_config
 
 
 class FeatureBuilder:
-    def __init__(self, d: int = "cpu"):
+    def __init__(self, d: str | torch.device = "cpu"):
         """FeatureBuilder constructor
 
         Args:
@@ -41,7 +42,9 @@ class FeatureBuilder:
                 classes=4,
             )
             self.visual_embedder.load_state_dict(
-                torch.load(CHECKPOINTS / "backbone_unet.pth", map_location=d)["weights"]
+                torch.load(CHECKPOINTS / "backbone_unet.pth", map_location=self.device)[
+                    "weights"
+                ]
             )
             self.visual_embedder = self.visual_embedder.encoder
             self.visual_embedder.to(d)
@@ -152,10 +155,6 @@ class FeatureBuilder:
             else:
                 distances = [0.0 for _ in range(g.num_edges)]
                 m = 1
-                # Add dummy edge features when add_eweights is false
-                # The model expects edge features to exist
-                dummy_polar = torch.zeros(g.num_edges, self.num_polar_bins, dtype=torch.float32)
-                g.edge_attr = dummy_polar
 
             g.geom = torch.tensor(geom, dtype=torch.float32)
             g.x = torch.tensor(feats, dtype=torch.float32)
@@ -178,9 +177,35 @@ class FeatureBuilder:
                 ).tolist()
                 try:
                     norm.append([1.0 / neigs])
-                except (ZeroDivisionError, ValueError):
+                except:
                     norm.append([1.0])
             g.norm = torch.tensor(norm, dtype=torch.float32)
+
+            #! DEBUG PURPOSES TO VISUALIZE RANDOM GRAPH IMAGE FROM DATASET
+            if False:
+                if id == rand_id and self.add_eweights:
+                    print("\n\n### EXAMPLE ###")
+
+                    img_path = features["paths"][id]
+                    img = Image.open(img_path).convert("RGB")
+                    draw = ImageDraw.Draw(img)
+
+                    center = lambda rect: (
+                        (rect[2] + rect[0]) / 2,
+                        (rect[3] + rect[1]) / 2,
+                    )
+                    select = [random.randint(0, len(srcs)) for _ in range(10)]
+                    for p, pair in enumerate(zip(srcs, dsts)):
+                        if p in select:
+                            sc = center(features["boxs"][id][pair[0]])
+                            ec = center(features["boxs"][id][pair[1]])
+                            draw.line((sc, ec), fill="grey", width=3)
+                            middle_point = ((sc[0] + ec[0]) / 2, (sc[1] + ec[1]) / 2)
+                            draw.text(middle_point, str(angles[p]), fill="black")
+                            draw.rectangle(features["boxs"][id][pair[0]], fill="red")
+                            draw.rectangle(features["boxs"][id][pair[1]], fill="blue")
+
+                    img.save("esempi/FUNSD/edges.png")
 
         return chunks, len(chunks)
 

@@ -1,11 +1,12 @@
 import os
 import shutil
-import requests
 import zipfile
+
+import requests
 import wget
-from ..utils import create_folder
 
 from ..paths import DATA
+from ..utils import create_folder
 
 
 def download_url(url, save_path, chunk_size=128):
@@ -92,10 +93,10 @@ def pau():
         with open(PAU / split, mode="r") as f:
             folder = split.split(".")[0]
             lines = f.readlines()
-            for line in lines:
-                line = line.rstrip("\n")
-                src = PAU / line
-                dst = PAU / "{}/{}".format(folder, line)
+            for l in lines:
+                l = l.rstrip("\n")
+                src = PAU / l
+                dst = PAU / "{}/{}".format(folder, l)
                 shutil.move(src, dst)
 
     os.remove(spl)

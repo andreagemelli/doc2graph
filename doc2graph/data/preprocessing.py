@@ -1,12 +1,13 @@
+import json
+import os
+
+import numpy as np
+import pytesseract
 import torch
 import torchvision
-import numpy as np
-from scipy.optimize import linprog
-import os
-from PIL import ImageDraw, Image
-import json
-import pytesseract
+from PIL import Image, ImageDraw
 from pytesseract import Output
+from scipy.optimize import linprog
 
 from ..paths import DATA, FUNSD_TEST
 
@@ -261,7 +262,7 @@ def load_predictions(path_preds, path_gts, path_images, debug=False):
 
         precision = precision / len(boxs_gts)
         recall = recall / len(boxs_gts)
-        # f1 = (2 * precision * recall) / (precision + recall)
+        f1 = (2 * precision * recall) / (precision + recall)
         # print(f1, precision, recall)
 
         img.save("prova.png")
