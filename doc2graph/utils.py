@@ -39,8 +39,7 @@ def create_folder(folder_path: str) -> None:
     Args:
         folder_path (str): path
     """
-    if not os.path.exists(folder_path):
-        os.mkdir(folder_path)
+    os.makedirs(folder_path, exist_ok=True)
 
     return
 
