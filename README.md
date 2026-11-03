@@ -87,15 +87,14 @@ This will:
 
 ### Additional Setup (Optional)
 
-For GPU acceleration, you may need to install CUDA-specific versions of PyTorch and DGL:
+For GPU acceleration, you may need to install a CUDA-specific version of PyTorch (PyG is pure Python and needs nothing extra for the ops used here):
 
 ```bash
 # For CUDA 11.8 (adjust version as needed)
 uv add torch==1.13.1+cu118 torchvision==0.14.1+cu118 --index-url https://download.pytorch.org/whl/cu118
-uv add dgl-cu118 --index-url https://data.dgl.ai/wheels/repo.html
 ```
 
-**Note**: For different OS installations or CUDA versions, refer to [PyTorch](https://pytorch.org/get-started/previous-versions/) and [DGL](https://www.dgl.ai/pages/start.html) documentation.
+**Note**: For different OS installations or CUDA versions, refer to [PyTorch](https://pytorch.org/get-started/previous-versions/) documentation.
 
 Finally, create the project folder structure and download data:
 
@@ -202,13 +201,3 @@ isbn="978-3-031-25069-9"
 ```
 
 ---
-
-## ⚠️ Security Notice
-
-**DGL Vulnerability**: This project uses `dgl>=1.1.3,<2.0.0` which has a known security vulnerability related to RPC pickle deserialization (GHSA-3x5x-fw77-g54c). 
-
-**Workaround**: When running DGL distributed training and inference (DistDGL), ensure you do not assign public IPs to any instance in the cluster.
-
-**Resolution**: This vulnerability will be addressed in future versions of the project when a compatible DGL version with the security fix becomes available.
-
-For more details, see the [DGL security advisory](https://github.com/dmlc/dgl/security/advisories/GHSA-3x5x-fw77-g54c).

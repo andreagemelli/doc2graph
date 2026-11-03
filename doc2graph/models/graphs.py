@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
-import dgl.function as fn
 import math
 import torch.nn.functional as F
+
+from torch_geometric.utils import degree
 
 from ..paths import CFGM
 from ..utils import get_config
@@ -35,7 +36,7 @@ class SetModel:
     def get_model(
         self, nodes: int, edges: int, chunks: list, verbatim: bool = True
     ) -> nn.Module:
-        """Return the DGL model defined in the setting file
+        """Return the PyG model defined in the setting file
 
         Args:
             nodes (int) : number of nodes target class
@@ -43,7 +44,7 @@ class SetModel:
             chunks (list) : list of indeces of chunks
 
         Returns:
-            A PyTorch nn.Module, your DGL model.
+            A PyTorch nn.Module, your PyG model.
         """
         print("\n### MODEL ###")
         print(f"-> Using {self.name}")
@@ -291,15 +292,11 @@ class GcnSAGELayer(nn.Module):
             self.linear.bias.data.uniform_(-stdv, stdv)
 
     def forward(self, g, h):
-        g = g.local_var()
-
         if not self.use_pp:
-            # norm = self.get_norm(g)
-            norm = g.ndata["norm"]
-            g.ndata["h"] = h
-            g.update_all(fn.u_mul_e("h", "weights", "m"), fn.sum(msg="m", out="h"))
-            ah = g.ndata.pop("h")
-            h = self.concat(h, ah, norm)
+            src, dst = g.edge_index
+            # weighted sum of incoming neighbour features
+            ah = torch.zeros_like(h).index_add_(0, dst, h[src] * g.weights.unsqueeze(-1))
+            h = self.concat(h, ah, g.norm)
 
         if self.dropout:
             h = self.dropout(h)
@@ -316,7 +313,7 @@ class GcnSAGELayer(nn.Module):
         return h
 
     def get_norm(self, g):
-        norm = 1.0 / g.in_degrees().float().unsqueeze(1)
+        norm = 1.0 / degree(g.edge_index[1], g.num_nodes).unsqueeze(1)
         norm[torch.isinf(norm)] = 0
         norm = norm.to(self.linear.weight.device)
         return norm
@@ -377,24 +374,14 @@ class MLPPredictor(nn.Module):
         self.W2 = nn.Linear(hidden_dim + 6, out_classes)
         self.drop = nn.Dropout(dropout)
 
-    def apply_edges(self, edges):
-        h_u = edges.src["h"]
-        h_v = edges.dst["h"]
-        polar = edges.data["feat"]
+    def forward(self, graph, h):
+        src, dst = graph.edge_index
+        h_u, h_v = h[src], h[dst]
+        polar = graph.edge_attr
 
         x = F.relu(self.norm(self.W1(torch.cat((h_u, h_v), dim=1))))
         x = torch.cat((x, polar), dim=1)
-        score = self.drop(self.W2(x))
-
-        return {"score": score}
-
-    def forward(self, graph, h):
-        # h contains the node representations computed from the GNN defined
-        # in the node classification section (Section 5.1).
-        with graph.local_scope():
-            graph.ndata["h"] = h
-            graph.apply_edges(self.apply_edges)
-            return graph.edata["score"]
+        return self.drop(self.W2(x))
 
 
 class MLPPredictor_E2E(nn.Module):
@@ -408,25 +395,14 @@ class MLPPredictor_E2E(nn.Module):
         self.W2 = nn.Linear(hidden_dim, out_classes)
         self.drop = nn.Dropout(dropout)
 
-    def apply_edges(self, edges):
-        h_u = edges.src["h"]
-        h_v = edges.dst["h"]
-        cls_u = F.softmax(edges.src["cls"], dim=1)
-        cls_v = F.softmax(edges.dst["cls"], dim=1)
-        polar = edges.data["feat"]
+    def forward(self, graph, h, cls):
+        src, dst = graph.edge_index
+        h_u, h_v = h[src], h[dst]
+        cls_u = F.softmax(cls[src], dim=1)
+        cls_v = F.softmax(cls[dst], dim=1)
+        polar = graph.edge_attr
 
         x = F.relu(
             self.norm(self.W1(torch.cat((h_u, cls_u, polar, h_v, cls_v), dim=1)))
         )
-        score = self.drop(self.W2(x))
-
-        return {"score": score}
-
-    def forward(self, graph, h, cls):
-        # h contains the node representations computed from the GNN defined
-        # in the node classification section (Section 5.1).
-        with graph.local_scope():
-            graph.ndata["h"] = h
-            graph.ndata["cls"] = cls
-            graph.apply_edges(self.apply_edges)
-            return graph.edata["score"]
+        return self.drop(self.W2(x))
