@@ -23,3 +23,5 @@ src/models/yolov5
 src/models/checkpoints
 prova*
 inference
+.cache_ggshield
+requirements-audit.txt

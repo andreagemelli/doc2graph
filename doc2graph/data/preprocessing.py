@@ -262,8 +262,6 @@ def load_predictions(path_preds, path_gts, path_images, debug=False):
 
         precision = precision / len(boxs_gts)
         recall = recall / len(boxs_gts)
-        f1 = (2 * precision * recall) / (precision + recall)
-        # print(f1, precision, recall)
 
         img.save("prova.png")
 
