@@ -48,6 +48,7 @@ Index:
 
 ---
 ## News!
+- 🚧 **v0.3.0-beta — migration from DGL to PyTorch Geometric.** Doc2Graph now builds on [PyTorch Geometric](https://github.com/pyg-team/pytorch_geometric) instead of [DGL](https://github.com/dmlc/dgl). DGL is no longer actively maintained (no release in about two years), it is incompatible with recent PyTorch versions, and its open security advisory (GHSA-3x5x-fw77-g54c) has no patched release. Moving to PyG lets us follow current PyTorch releases and keep dependencies free of known vulnerabilities. <br> Pretrained checkpoints are unchanged and load as before; on the FUNSD test set the shipped `e2e-funsd-best.pt` gives identical metrics with DGL and PyG. Other changes: PyTorch `>=2.9.1` and Python `>=3.10`. This is a beta: training from scratch on GPU and the PAU pipeline have not been re-validated yet, so please report any issue.
 - 🔥 Added **inference** method: you can now use Doc2Graph directly on your documents simply passing a path to them! <br> This call will output an image with the connected entities and a json / dictionary with all the useful information you need! 🤗
 ```
 uv run python -m doc2graph.main -addG -addT -addE -addV --weights e2e-funsd-best.pt --inference --docs /path/to/your/image.png
