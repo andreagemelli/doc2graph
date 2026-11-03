@@ -1,0 +1,7 @@
+version: 2
+secret:
+  ignored-matches:
+    # Discord webhook committed in 2022 (src/training/*.py), removed from the code
+    # in 5b5be3e and revoked; GitGuardian reports it as invalid. Only in history.
+    - name: revoked Discord webhook (2022 history)
+      match: 7a3ea5bc46e1e5cf416e3f21d17c530dadd8905d21c719c8c63d023723a9e39e

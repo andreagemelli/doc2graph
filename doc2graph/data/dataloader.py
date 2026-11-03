@@ -79,7 +79,7 @@ class Document2Graph(data.Dataset):
             try:
                 # TODO to be changed
                 self.edge_num_features = self.graphs[0].edge_attr.shape[1]
-            except:
+            except (KeyError, AttributeError):
                 self.edge_num_features = 0
 
             for idx, labels in enumerate(self.edge_labels):

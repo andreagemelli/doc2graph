@@ -2,7 +2,7 @@
 
 ![model](model.png)
 
-![Python](https://img.shields.io/badge/python-3.10%7C3.11-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54) ![PyTorch](https://img.shields.io/badge/PyTorch-2.9%2B-EE4C2C?style=for-the-badge&logo=PyTorch&logoColor=white) ![uv](https://img.shields.io/badge/uv-package%20manager-FFD43B?style=for-the-badge&logo=python&logoColor=black) ![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
+![Python](https://img.shields.io/badge/python-3.11-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54) ![PyTorch](https://img.shields.io/badge/PyTorch-2.9%2B-EE4C2C?style=for-the-badge&logo=PyTorch&logoColor=white) ![uv](https://img.shields.io/badge/uv-package%20manager-FFD43B?style=for-the-badge&logo=python&logoColor=black) ![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/andreagemelli/doc2graph)
 
@@ -44,6 +44,7 @@ Index:
 
 ---
 ## News!
+- 🔒 **v0.3.1-beta — security patch.** All dependencies upgraded to versions with no known vulnerabilities (Pillow 13, urllib3, tornado, Jupyter stack, ...). Development tools (`pytest`, `ruff`, `pip-audit`, `jupyter`) moved to a `dev` dependency group (installed by default with `uv sync`, skip them with `uv sync --no-dev`); unused dependencies (`tensorboard`, `matplotlib`, `fasttext`, `pydantic`, `itsdangerous`) removed. Python `3.11` is now required. A CI now runs lint, dependency audit, secret scanning and CPU smoke tests on every PR. The pretrained FUNSD checkpoints give the same results as v0.3.0-beta.
 - 🚀 **v0.3.0-beta — migration from DGL to PyTorch Geometric.** Doc2Graph now builds on [PyTorch Geometric](https://github.com/pyg-team/pytorch_geometric) instead of [DGL](https://github.com/dmlc/dgl). DGL is no longer actively maintained (no release in about two years), it does not support recent PyTorch versions, and its open security advisory ([GHSA-3x5x-fw77-g54c](https://github.com/dmlc/dgl/security/advisories/GHSA-3x5x-fw77-g54c)) has no patched release. Moving to PyG lets us follow current PyTorch releases and keep dependencies free of known vulnerabilities. Requirements are now PyTorch `>=2.9.1` and Python `>=3.10`.
   <br> **What was tested** (CPU only, no GPU available):
   - old DGL layers vs. new PyG layers with the same weights on random batched graphs: identical outputs (max difference 0.0);
@@ -66,7 +67,7 @@ uv run python -m doc2graph.main \
 ## Environment Setup
 
 ### Prerequisites
-- Python 3.8-3.11 (recommended: 3.10)
+- Python 3.11
 - [uv](https://docs.astral.sh/uv/) package manager
 
 ### Installation
@@ -91,7 +92,7 @@ uv pip install -e .
 This will:
 - Install all dependencies with compatible versions
 - Install the `doc2graph` package in development mode
-- Set up the virtual environment with Python 3.10
+- Set up the virtual environment with Python 3.11
 
 ### Additional Setup (Optional)
 
