@@ -529,7 +529,7 @@ wheels = [
 
 [[package]]
 name = "doc2graph"
-version = "0.3.1b0"
+version = "0.3.2b0"
 source = { editable = "." }
 dependencies = [
     { name = "easyocr" },
